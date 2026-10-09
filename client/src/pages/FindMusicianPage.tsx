@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
-  ArrowLeft, UserSearch, Loader2, Send, Sparkles, ChevronDown, AlertCircle, Users, MapPin, Briefcase, LayoutGrid,
+  ArrowLeft, UserSearch, Loader2, Send, Sparkles, ChevronDown, AlertCircle, Users, MapPin, Briefcase, LayoutGrid, Mic, Undo2,
 } from 'lucide-react';
 import { requestsAPI, type RequestOverrides, type RequestChip, type CreateRequestResponse } from '../lib/requestsApi';
 import { referenceAPI } from '../lib/api';
@@ -12,6 +12,8 @@ import { useAuthGate } from '../components/AuthGateModal';
 import SelectSheet from '../components/SelectSheet';
 import RequestChips from '../components/findMusician/RequestChips';
 import RequestResult from '../components/findMusician/RequestResult';
+import { MicButton, VoicePanel } from '../components/findMusician/VoiceInput';
+import { isVoiceRecordingSupported, useVoiceRecorder, voiceFileExt, type VoiceRecording } from '../lib/voiceRecording';
 import { maskDateInput, parseMaskedDate, maskedToIsoDay, isMaskedDatePast, isoToMaskedMsk } from '../lib/mskDate';
 import { plural } from '../lib/plural';
 import { useSeo, seoTitle } from '../lib/seo';
@@ -27,6 +29,10 @@ const DRAFT_KEY = 'mooza_find_draft';
 const MAX_LEN = 1000;
 const DEBOUNCE_MS = 500;
 const MAX_PROFESSIONS = 3;
+// Голосовой ввод: как на сервере (POST /api/requests/transcribe).
+const VOICE_MAX_SECONDS = 30;
+const VOICE_MAX_BYTES = 2 * 1024 * 1024;
+const VOICE_HINT = 'нужен барабанщик на концерт в Самаре 20 ноября';
 
 // Черновик переживает вход через AuthGate (возврат на /find в той же вкладке).
 function readDraft(): { text: string; overrides: RequestOverrides } {
@@ -50,13 +56,14 @@ function writeDraft(text: string, overrides: RequestOverrides) {
   } catch { /* storage недоступен — без черновика */ }
 }
 
-function useDebounced<T>(value: T, ms: number): T {
+/** Значение с задержкой; flush(v) — применить сразу (текст из голосового ввода разбираем без ожидания). */
+function useDebounced<T>(value: T, ms: number): [T, (v: T) => void] {
   const [v, setV] = useState(value);
   useEffect(() => {
     const t = setTimeout(() => setV(value), ms);
     return () => clearTimeout(t);
   }, [value, ms]);
-  return v;
+  return [v, setV];
 }
 
 const inputCls = 'w-full px-3.5 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-primary-500';
@@ -90,8 +97,80 @@ export default function FindMusicianPage() {
 
   useEffect(() => { writeDraft(text, overrides); }, [text, overrides]);
 
-  const debouncedText = useDebounced(text.trim(), DEBOUNCE_MS);
+  const [debouncedText, flushDebouncedText] = useDebounced(text.trim(), DEBOUNCE_MS);
   const canParse = debouncedText.length >= 3;
+
+  // ── Голосовой ввод: запись → наш STT → текст в поле → сразу разбор ─────────
+  const voiceSupported = useMemo(isVoiceRecordingSupported, []);
+  const [transcribing, setTranscribing] = useState(false);
+  // Текст до голосового ввода — чтобы «Вернуть прежний» после замены.
+  const [voiceUndo, setVoiceUndo] = useState<{ text: string; overrides: RequestOverrides } | null>(null);
+  const transcribeCtrlRef = useRef<AbortController | null>(null);
+  const micRef = useRef<HTMLButtonElement>(null);
+  const latest = useRef({ text, overrides });
+  latest.current = { text, overrides };
+
+  useEffect(() => () => transcribeCtrlRef.current?.abort(), []);
+
+  const applyVoiceText = (spoken: string) => {
+    const prev = latest.current;
+    const next = spoken.slice(0, MAX_LEN);
+    setVoiceUndo(prev.text.trim() && prev.text.trim() !== next.trim() ? { text: prev.text, overrides: prev.overrides } : null);
+    setText(next);
+    setOverrides({});
+    setDateTouched(false);
+    setBudgetTouched(false);
+    flushDebouncedText(next.trim());
+  };
+
+  const undoVoice = () => {
+    if (!voiceUndo) return;
+    setText(voiceUndo.text);
+    setOverrides(voiceUndo.overrides);
+    setDateTouched(false);
+    setBudgetTouched(false);
+    flushDebouncedText(voiceUndo.text.trim());
+    setVoiceUndo(null);
+  };
+
+  const transcribe = async ({ blob, mimeType, durationMs }: VoiceRecording) => {
+    if (blob.size < 1000 || durationMs < 600) {
+      toast.error('Запись слишком короткая — нажмите на микрофон и скажите ещё раз');
+      return;
+    }
+    if (blob.size > VOICE_MAX_BYTES) {
+      toast.error('Запись слишком длинная — говорите не дольше 30 секунд');
+      return;
+    }
+    transcribeCtrlRef.current?.abort();
+    const ctrl = new AbortController();
+    transcribeCtrlRef.current = ctrl;
+    setTranscribing(true);
+    try {
+      const { data } = await requestsAPI.transcribe(blob, mimeType, voiceFileExt(mimeType), ctrl.signal);
+      if (!ctrl.signal.aborted) applyVoiceText(data.text);
+    } catch (e) {
+      if (!ctrl.signal.aborted) toast.error(getApiError(e, 'Не удалось распознать речь — попробуйте ещё раз или введите текст'));
+    } finally {
+      if (transcribeCtrlRef.current === ctrl) {
+        transcribeCtrlRef.current = null;
+        setTranscribing(false);
+      }
+    }
+  };
+
+  const voice = useVoiceRecorder({
+    maxSeconds: VOICE_MAX_SECONDS,
+    onRecorded: (rec) => { void transcribe(rec); },
+    onError: (kind) => toast.error(
+      kind === 'denied' ? 'Разрешите доступ к микрофону в настройках браузера'
+        : kind === 'no-device' ? 'Микрофон не найден — подключите его или введите текст'
+          : 'Не удалось включить микрофон — введите текст',
+    ),
+  });
+  const voiceBusy = voice.status !== 'idle' || transcribing;
+  // После «Готово»/«Отмена» фокус — на кнопку микрофона (панель с кнопками исчезает).
+  const focusMic = () => micRef.current?.focus({ preventScroll: true });
 
   const parseQ = useQuery({
     queryKey: ['request-parse', debouncedText, overrides],
@@ -207,12 +286,13 @@ export default function FindMusicianPage() {
     setDateTouched(false);
     setBudgetTouched(false);
     setDetailsOpen(false);
+    setVoiceUndo(null);
     writeDraft('', {});
   };
 
   const quotaExhausted = gate.isAuthed && quotaLeft === 0;
   const canSubmit = !!data && !data.needsProfession && data.errors.length === 0 && !dateError && !budgetError
-    && text.trim().length >= 3 && !createMut.isPending && !quotaExhausted;
+    && text.trim().length >= 3 && !createMut.isPending && !quotaExhausted && !voiceBusy;
 
   const submit = () => {
     if (!canSubmit) return;
@@ -248,36 +328,81 @@ export default function FindMusicianPage() {
 
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 space-y-3">
               <label htmlFor="find-text" className="block text-sm font-semibold text-white">Опишите, кого ищете</label>
-              <textarea
-                id="find-text"
-                value={text}
-                onChange={(e) => {
-                  const v = e.target.value.slice(0, MAX_LEN);
-                  setText(v);
-                  // Поле очищено — новый запрос: прежние правки чипов не тянем.
-                  if (!v.trim()) { setOverrides({}); setDateTouched(false); setBudgetTouched(false); }
-                }}
-                rows={3}
-                maxLength={MAX_LEN}
-                placeholder="Например: нужен барабанщик на концерт 20 ноября в Самаре, метал, бюджет 10 000"
-                className="w-full px-3.5 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 resize-none leading-relaxed"
-              />
-              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1.5 min-h-[16px]">
-                  {canParse && parseQ.isFetching && <><Loader2 size={12} className="animate-spin" /> Разбираем…</>}
-                </span>
-                <span>{text.length}/{MAX_LEN}</span>
+              <div className="relative">
+                <textarea
+                  id="find-text"
+                  value={text}
+                  onChange={(e) => {
+                    const v = e.target.value.slice(0, MAX_LEN);
+                    setText(v);
+                    setVoiceUndo(null);
+                    // Поле очищено — новый запрос: прежние правки чипов не тянем.
+                    if (!v.trim()) { setOverrides({}); setDateTouched(false); setBudgetTouched(false); }
+                  }}
+                  readOnly={voiceBusy}
+                  aria-busy={transcribing || undefined}
+                  rows={3}
+                  maxLength={MAX_LEN}
+                  placeholder="Например: нужен барабанщик на концерт 20 ноября в Самаре, метал, бюджет 10 000"
+                  className={`w-full px-3.5 py-3 ${voiceSupported ? 'pr-14' : ''} bg-slate-800 border border-slate-700 rounded-2xl text-base text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 resize-none leading-relaxed`}
+                />
+                {voiceSupported && (
+                  <MicButton
+                    ref={micRef}
+                    status={voice.status}
+                    transcribing={transcribing}
+                    onStart={() => { void voice.start(); }}
+                    onStop={voice.stop}
+                  />
+                )}
               </div>
+
+              {voiceSupported && voiceBusy ? (
+                <VoicePanel
+                  status={voice.status}
+                  startedAt={voice.startedAt}
+                  maxSeconds={VOICE_MAX_SECONDS}
+                  analyserRef={voice.analyserRef}
+                  transcribing={transcribing}
+                  onDone={() => { voice.stop(); focusMic(); }}
+                  onCancel={() => { voice.cancel(); focusMic(); }}
+                />
+              ) : (
+                <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1.5 min-h-[16px]">
+                    {canParse && parseQ.isFetching && <><Loader2 size={12} className="animate-spin" /> Разбираем…</>}
+                  </span>
+                  <span>{text.length}/{MAX_LEN}</span>
+                </div>
+              )}
+
+              {voiceUndo && !voiceBusy && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                  <span className="flex items-center gap-1.5"><Mic size={12} /> Текст заменён распознанным.</span>
+                  <button
+                    type="button"
+                    onClick={undoVoice}
+                    className="inline-flex items-center gap-1 min-h-[32px] text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    <Undo2 size={13} /> Вернуть прежний
+                  </button>
+                </div>
+              )}
 
               {!text.trim() && (
                 <div className="space-y-1.5">
+                  {voiceSupported && !voiceBusy && (
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Нажмите 🎤 и скажите: “{VOICE_HINT}”
+                    </p>
+                  )}
                   <p className="text-xs text-slate-500 flex items-center gap-1"><Sparkles size={12} /> Например:</p>
                   <div className="flex flex-col gap-1.5">
                     {EXAMPLES.map((ex) => (
                       <button
                         key={ex}
                         type="button"
-                        onClick={() => { setText(ex); setOverrides({}); setDateTouched(false); setBudgetTouched(false); }}
+                        onClick={() => { setText(ex); setOverrides({}); setDateTouched(false); setBudgetTouched(false); setVoiceUndo(null); }}
                         className="text-left text-sm text-primary-300 hover:text-primary-200 bg-primary-500/5 hover:bg-primary-500/10 border border-primary-500/15 rounded-xl px-3 py-2 transition-colors"
                       >
                         «{ex}»

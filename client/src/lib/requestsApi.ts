@@ -73,4 +73,15 @@ export const requestsAPI = {
   create: (text: string, overrides: RequestOverrides) =>
     api.post<CreateRequestResponse>('/requests', { text, overrides }),
   quota: () => api.get<{ limit: number; used: number; remaining: number }>('/requests/quota'),
+  /** Голосовой ввод: запись ≤ 30 с → распознанный текст (наш STT, гостю тоже). */
+  transcribe: (audio: Blob, mimeType: string, ext: string, signal?: AbortSignal) => {
+    const fd = new FormData();
+    fd.append('audio', new File([audio], `voice.${ext}`, { type: mimeType }));
+    return api.post<{ text: string }>('/requests/transcribe', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      signal,
+      // Очередь распознавания (до минуты) + сама расшифровка.
+      timeout: 100_000,
+    });
+  },
 };
