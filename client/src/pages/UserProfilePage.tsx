@@ -23,6 +23,8 @@ import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReviewsBlock from '../components/ReviewsBlock';
+import ConfirmedCredits from '../components/ConfirmedCredits';
+import { ResponseBadgePill } from '../components/ResponseBadge';
 import { useAuthStore } from '../stores/authStore';
 import { useScrollLock } from '../lib/scrollLock';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -324,6 +326,8 @@ export default function UserProfilePage() {
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
             {(user._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
             {user.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
+            {/* «Отвечает быстро» — категория с сервера (гостю тоже, без минут) */}
+            <ResponseBadgePill value={user.responseBadge} />
           </div>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
@@ -660,6 +664,9 @@ export default function UserProfilePage() {
                 </div>
               </div>
             )}
+
+            {/* ── Подтверждённый опыт (кредиты из релизов/клипов) ── */}
+            {userId && <ConfirmedCredits userId={userId} />}
 
             {/* ── Professions ── */}
             {(user.userProfessions?.length ?? 0) > 0 && (
