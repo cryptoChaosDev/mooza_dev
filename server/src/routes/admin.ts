@@ -8,6 +8,7 @@ import { yoNorm } from '../utils/search';
 import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
 import { artistAdminIds } from '../lib/artistAccess';
+import { notifyVerificationDecision } from '../lib/artistModerationNotify';
 import { disconnectUserSockets } from '../socket';
 import {
   WAITLIST_BULK_MAX, INVITES_DISABLED_ERROR, waitlistInvitesWork, inviteWaitlistEntry, inviteWaitlistBulk,
@@ -915,6 +916,7 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req: Auth
       body: `Заявка на верификацию «${artist.name}» отклонена.${reasonText} Исправьте данные и отправьте повторно.`,
       link: `/artist/${artist.id}`,
     });
+    void notifyVerificationDecision(artist, 'rejected', reason);
 
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { return adminError(res, 'PATCH /artists/:id/reject', e); }
@@ -935,6 +937,7 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: Auth
       body: `Артист «${artist.name}» успешно верифицирован и добавлен в каталог`,
       link: `/artist/${artist.id}`,
     });
+    void notifyVerificationDecision(artist, 'verified');
 
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { return adminError(res, 'PATCH /artists/:id/verify', e); }

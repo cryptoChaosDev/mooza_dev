@@ -39,6 +39,7 @@ import ArtistConcerts from '../components/artist/ArtistConcerts';
 import ArtistCtaRow from '../components/artist/ArtistCtaRow';
 import ArtistQrModal from '../components/artist/ArtistQrModal';
 import ArtistBioStats from '../components/artist/ArtistBioStats';
+import VerificationPushHint from '../components/artist/VerificationPushHint';
 
 const ACTIVITY_OPTIONS = [
   { id: 'ACTIVE',    name: 'Действующий' },
@@ -271,7 +272,10 @@ export default function ArtistPage() {
 
   const requestVerifyMut = useMutation({
     mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
-    onSuccess: () => { invalidateArtist(); setProofUrl(''); setVerifyUnmet([]); },
+    onSuccess: () => {
+      invalidateArtist(); setProofUrl(''); setVerifyUnmet([]);
+      toast.success('Заявка отправлена — модератор проверит её в ближайшее время');
+    },
     onError: (err: any) => {
       const data = err?.response?.data;
       if (data?.error === 'CONDITIONS_NOT_MET' && Array.isArray(data.unmet)) {
@@ -769,9 +773,10 @@ export default function ArtistPage() {
               );
             })()}
 
-            {/* PENDING — withdraw action (status meaning is shown in the line above) */}
+            {/* PENDING — push о результате + отзыв заявки (статус — в строке выше) */}
             {artist.status === 'PENDING' && (
-              <div className="mb-4">
+              <div className="mb-4 space-y-2.5">
+                <VerificationPushHint />
                 <button
                   onClick={() => withdrawMut.mutate()}
                   disabled={withdrawMut.isPending}

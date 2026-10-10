@@ -82,6 +82,8 @@ function typeIcon(type: string) {
     case 'artist_owner_transferred': return <Crown      size={13} className="text-yellow-400" />;
     case 'artist_verified':       return <BadgeCheck    size={13} className="text-sky-400" />;
     case 'artist_rejected':       return <ShieldX       size={13} className="text-red-400" />;
+    // Админам платформы: новая заявка на верификацию (lib/artistModerationNotify)
+    case 'admin_artist_verification': return <ShieldCheck size={13} className="text-amber-400" />;
     // ── Releases ───────────────────────────────────────────────────────────
     case 'release_participant_invite':    return <Disc3 size={13} className="text-primary-400" />;
     case 'release_participant_confirmed': return <Disc3 size={13} className="text-green-400" />;

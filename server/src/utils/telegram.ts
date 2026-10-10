@@ -43,6 +43,11 @@ export async function tgLog(text: string): Promise<void> {
  * ФИО: в мониторинговый чат уходят только событие и id/счётчик (ПДн не логируем).
  */
 const e = escTg;
+const MODERATION_DECISION = {
+  verified: '✅ <b>Артист верифицирован</b>',
+  rejected: '❌ <b>Заявка на верификацию отклонена</b>',
+  withdrawn: '↩️ <b>Заявка на верификацию отозвана</b>',
+} as const;
 export const tgEvent = {
   register: (userId: string) =>
     tgLog(`🆕 <b>Новый пользователь</b>\n🆔 ${e(userId)}`),
@@ -90,4 +95,22 @@ export const tgEvent = {
     tgLog(`📋 <b>Заявка (waitlist)</b>\n📌 ${e(type)}\n🔢 Всего заявок: ${total}`),
   professionRequest: (user: string, profession: string, comment?: string) =>
     tgLog(`➕ <b>Запрос на добавление профессии</b>\n👤 ${e(user)}\n🧩 «${e(profession)}»${comment ? `\n💬 ${e(comment)}` : ''}`),
+  // Модерация артистов (lib/artistModerationNotify) — без ФИО: артист и ссылки.
+  artistVerificationRequest: (a: {
+    name: string; type: string | null; city: string | null; members: number;
+    proofUrl: string | null; artistUrl: string; moderationUrl: string;
+  }) =>
+    tgLog(
+      `🛡 <b>Заявка на верификацию артиста</b>\n` +
+      `🎤 ${e(a.name)}${a.type ? ` · ${e(a.type)}` : ''}${a.city ? ` · ${e(a.city)}` : ''}\n` +
+      `👥 Подтверждённых участников: ${a.members}\n` +
+      (a.proofUrl ? `🔗 Подтверждение: ${e(a.proofUrl)}\n` : '') +
+      `🎵 Страница: ${e(a.artistUrl)}\n` +
+      `➡️ Проверить: ${e(a.moderationUrl)}`,
+    ),
+  artistModeration: (decision: 'verified' | 'rejected' | 'withdrawn', name: string, artistUrl: string, reason?: string) =>
+    tgLog(
+      `${MODERATION_DECISION[decision]}\n🎤 ${e(name)}` +
+      `${reason ? `\n💬 ${e(reason)}` : ''}\n🎵 ${e(artistUrl)}`,
+    ),
 };

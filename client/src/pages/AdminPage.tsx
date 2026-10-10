@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
@@ -3497,9 +3498,14 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+const isTabId = (v: string | null): v is TabId => TABS.some((t) => t.id === v);
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<TabId>('structure');
+  // ?tab=moderation и т.п. — ссылки из уведомлений и Telegram (lib/artistModerationNotify).
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [tab, setTab] = useState<TabId>(() => (isTabId(tabParam) ? tabParam : 'structure'));
+  useEffect(() => { if (isTabId(tabParam)) setTab(tabParam); }, [tabParam]);
 
   return (
     <div className="min-h-screen bg-slate-950 p-4 pb-24 lg:p-8 lg:pb-16">

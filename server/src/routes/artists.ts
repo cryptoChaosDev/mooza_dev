@@ -6,6 +6,7 @@ import { uploadArtistAvatar, uploadArtistBanner } from '../middleware/upload';
 import { Prisma, ArtistType } from '@prisma/client';
 import crypto from 'crypto';
 import { tgEvent } from '../utils/telegram';
+import { notifyVerificationRequested, notifyVerificationDecision } from '../lib/artistModerationNotify';
 import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
 import { yoNorm } from '../utils/search';
 import { notify, notifyMany } from '../utils/notify';
@@ -1033,6 +1034,10 @@ router.patch('/:id/request-verification', authenticate, async (req: AuthRequest,
 
     const updated = await prisma.artist.update({ where: { id }, data });
 
+    // Админам — в Telegram-чат команды и в колокольчик (push / личный бот).
+    // Не ждём: ответ пользователю не зависит от доставки.
+    void notifyVerificationRequested(updated, userId, confirmedMembers);
+
     return res.json(serializeArtist(updated));
   } catch (err) {
     console.error('[artists] PATCH /:id/request-verification', err);
@@ -1065,6 +1070,7 @@ router.patch('/:id/withdraw', authenticate, async (req: AuthRequest, res: Respon
       where: { id },
       data: { status: 'DRAFT' },
     });
+    void notifyVerificationDecision(updated, 'withdrawn');
 
     return res.json(serializeArtist(updated));
   } catch (err) {
