@@ -27,6 +27,23 @@ export interface SceneConcert {
   artist: { id: string; slug: string | null; name: string; avatar: string | null; verified: boolean } | null;
 }
 
+export interface SceneConcertDetail extends SceneConcert {
+  description: string | null;
+  /** ISO с местным поясом города; null — неизвестно. */
+  endsAt: string | null;
+  ageLimit: string | null;
+  organizer: string | null;
+  posterUrl: string | null;
+  /** Показывается на «Сцене» (афиша или проверенный артист). */
+  onScene: boolean;
+}
+
+export interface SceneConcertPageData {
+  concert: SceneConcertDetail;
+  moreByArtist: SceneConcert[];
+  sameDay: SceneConcert[];
+}
+
 export interface SceneConcertPage {
   city: { slug: string; name: string } | null;
   period: ScenePeriod;
@@ -50,6 +67,7 @@ export const sceneAPI = {
   cities: () => api.get<{ cities: SceneCity[] }>('/scene/cities').then((r) => r.data.cities),
   concerts: (params: { city?: string; period?: ScenePeriod; page?: number; limit?: number }) =>
     api.get<SceneConcertPage>('/scene/concerts', { params }).then((r) => r.data),
+  concert: (id: string) => api.get<SceneConcertPageData>(`/scene/concerts/${id}`).then((r) => r.data),
   artistConcerts: (artistId: string) =>
     api.get<{ items: SceneConcert[] }>(`/scene/artist/${artistId}/concerts`).then((r) => r.data.items),
   addConcert: (data: NewConcertPayload) => api.post<{ id: string }>('/scene/concerts', data),
@@ -109,3 +127,49 @@ export function dayHeading(dayKey: string, now = new Date()): string {
 export function priceLabel(n: number | null): string | null {
   return n == null ? null : `от ${n.toLocaleString('ru-RU')} ₽`;
 }
+
+// ─── «Добавить в календарь» (.ics) ───────────────────────────────────────────
+
+const icsText = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsUtc = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+
+/** Событие календаря (RFC 5545): время в UTC, без времени — на весь день. */
+export function concertIcs(c: SceneConcertDetail, pageUrl: string): string {
+  const start = Date.parse(c.startsAt);
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Moooza//Scene//RU', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+    `UID:${c.id}@moooza.ru`, `DTSTAMP:${icsUtc(new Date().toISOString())}`];
+  if (c.hasTime) {
+    lines.push(`DTSTART:${icsUtc(c.startsAt)}`);
+    lines.push(`DTEND:${icsUtc(c.endsAt ?? new Date(start + 2 * 60 * 60 * 1000).toISOString())}`);
+  } else {
+    const day = concertDayKey(c).replace(/-/g, '');
+    const next = new Date(Date.parse(`${concertDayKey(c)}T00:00:00Z`) + 24 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, '');
+    lines.push(`DTSTART;VALUE=DATE:${day}`, `DTEND;VALUE=DATE:${next}`);
+  }
+  lines.push(`SUMMARY:${icsText(c.title)}`);
+  const where = [c.venue, c.address ?? c.cityName].filter(Boolean).join(', ');
+  if (where) lines.push(`LOCATION:${icsText(where)}`);
+  lines.push(`URL:${pageUrl}`);
+  lines.push(`DESCRIPTION:${icsText([c.ticketUrl ? `Билеты: ${c.ticketUrl}` : null, pageUrl].filter(Boolean).join('\n'))}`);
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+export function downloadConcertIcs(c: SceneConcertDetail): void {
+  const pageUrl = `${window.location.origin}/concerts/${c.id}`;
+  const blob = new Blob([concertIcs(c, pageUrl)], { type: 'text/calendar;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'moooza-concert.ics';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+/** Поиск площадки на Яндекс Картах (без API и ключей). */
+export function mapsSearchUrl(c: Pick<SceneConcert, 'venue' | 'address' | 'cityName'>): string {
+  const q = [c.address ?? c.venue, c.address ? null : c.cityName].filter(Boolean).join(', ');
+  return `https://yandex.ru/maps/?text=${encodeURIComponent(q)}`;
+}
+

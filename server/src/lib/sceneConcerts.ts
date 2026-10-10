@@ -16,7 +16,10 @@ import { notify } from '../utils/notify';
 import { tgLog } from '../utils/telegram';
 import logger from '../utils/logger';
 import { slugifyArtistName } from './artistSlug';
-import { cityKey, crawlQticketsCity, fetchQticketsCities, isoOffsetMinutes, qticketsTicketUrl, type QticketsItem } from './qtickets';
+import {
+  cityKey, crawlQticketsCity, fetchQticketsCities, fetchQticketsEventDetails, isoOffsetMinutes, qticketsTicketUrl,
+  type QticketsItem,
+} from './qtickets';
 
 export type ConcertSource = 'YANDEX_MUSIC' | 'MANUAL' | 'QTICKETS';
 
@@ -260,11 +263,147 @@ export async function listArtistConcerts(artistId: string, now = new Date()): Pr
   return dedupeConcerts(rows).map(serializeConcert);
 }
 
-/** sitemap-scene.xml: хаб /scene и города с предстоящими концертами. */
-export async function listSitemapScene(): Promise<{ path: string; lastmod: Date | null }[]> {
-  const cities = await listSceneCities();
+/**
+ * sitemap-scene.xml: хаб /scene, города с предстоящими концертами и страницы
+ * концертов артистов Moooza (концерты чистой афиши не индексируем — это копия Qtickets).
+ */
+export async function listSitemapScene(now = new Date()): Promise<{ path: string; lastmod: Date | null }[]> {
+  const cities = await listSceneCities(now);
   if (!cities.length) return [];
-  return [{ path: '/scene', lastmod: null }, ...cities.map((c) => ({ path: `/scene/${c.slug}`, lastmod: null }))];
+  const { from, to } = periodRange('all', now);
+  const concerts = await prisma.concert.findMany({
+    where: { artist: { status: { in: VISIBLE_ARTIST_STATUSES as any } }, startsAt: { gte: from, lt: to } },
+    select: { id: true, updatedAt: true },
+    orderBy: { startsAt: 'asc' },
+    take: 5000,
+  });
+  return [
+    { path: '/scene', lastmod: null },
+    ...cities.map((c) => ({ path: `/scene/${c.slug}`, lastmod: null })),
+    ...concerts.map((c) => ({ path: `/concerts/${c.id}`, lastmod: c.updatedAt })),
+  ];
+}
+
+// ─── Страница концерта ───────────────────────────────────────────────────────
+
+const CONCERT_DETAIL_SELECT = {
+  ...CONCERT_SELECT,
+  description: true, endsAt: true, ageLimit: true, organizer: true, posterUrl: true, detailsFetchedAt: true,
+} satisfies Prisma.ConcertSelect;
+
+export interface ConcertDetailDTO extends ConcertDTO {
+  description: string | null;
+  /** ISO с местным поясом города; null — неизвестно. */
+  endsAt: string | null;
+  ageLimit: string | null;
+  organizer: string | null;
+  posterUrl: string | null;
+  /** Показывается на «Сцене» (афиша или проверенный артист). */
+  onScene: boolean;
+}
+
+/** Подробности события Qtickets — повторно не чаще раза в неделю (цена, описание меняются). */
+const DETAILS_REFRESH_MS = 7 * DAY;
+const detailsInFlight = new Map<string, Promise<void>>();
+
+/** Дочитать подробности одного события Qtickets и сохранить. Never throws. */
+export async function fetchConcertDetails(c: { id: string; url: string | null }): Promise<void> {
+  if (!c.url) return;
+  const running = detailsInFlight.get(c.id);
+  if (running) return running;
+  const job = (async () => {
+    try {
+      const d = await fetchQticketsEventDetails(c.url!, 8000);
+      await prisma.concert.update({
+        where: { id: c.id },
+        data: d
+          ? {
+              description: d.description, address: d.address ?? undefined, endsAt: d.endsAt,
+              organizer: d.organizer, ageLimit: d.ageLimit,
+              priceFrom: d.priceFrom ?? undefined, detailsFetchedAt: new Date(),
+            }
+          // Страница недоступна — не долбим её при каждом открытии: попробуем через неделю.
+          : { detailsFetchedAt: new Date() },
+      });
+    } catch (e: any) {
+      logger.warn(`[scene] concert details ${c.id} failed: ${e?.message}`);
+    } finally {
+      detailsInFlight.delete(c.id);
+    }
+  })();
+  detailsInFlight.set(c.id, job);
+  return job;
+}
+
+/** Ночью: подробности новых (и устаревших) будущих событий Qtickets, не больше limit. */
+export async function enrichQticketsDetails(opts: { limit?: number; delayMs?: number; now?: Date } = {}): Promise<number> {
+  const now = opts.now ?? new Date();
+  const rows = await prisma.concert.findMany({
+    where: {
+      source: 'QTICKETS', startsAt: { gt: now },
+      OR: [{ detailsFetchedAt: null }, { detailsFetchedAt: { lt: new Date(now.getTime() - DETAILS_REFRESH_MS) } }],
+    },
+    // Сначала концерты артистов Moooza и ближайшие.
+    orderBy: [{ artistId: { sort: 'asc', nulls: 'last' } }, { startsAt: 'asc' }],
+    select: { id: true, url: true },
+    take: opts.limit ?? 800,
+  });
+  for (const [i, r] of rows.entries()) {
+    if (i > 0) await new Promise((res) => setTimeout(res, opts.delayMs ?? 1000));
+    await fetchConcertDetails(r);
+  }
+  return rows.length;
+}
+
+function serializeConcertDetail(c: Prisma.ConcertGetPayload<{ select: typeof CONCERT_DETAIL_SELECT }>): ConcertDetailDTO {
+  return {
+    ...serializeConcert(c),
+    description: c.description,
+    endsAt: c.endsAt ? localIso(c.endsAt, c.utcOffsetMin) : null,
+    ageLimit: c.ageLimit,
+    organizer: c.organizer,
+    posterUrl: c.posterUrl ?? c.imageUrl,
+    onScene: !c.artist || VISIBLE_ARTIST_STATUSES.includes(c.artist.status),
+  };
+}
+
+/**
+ * Концерт для страницы /concerts/:id + соседи: ещё концерты артиста и концерты
+ * этого города в тот же день. У Qtickets подробности дочитываются при первом открытии.
+ */
+export async function getConcertDetail(id: string, now = new Date()): Promise<{
+  concert: ConcertDetailDTO; moreByArtist: ConcertDTO[]; sameDay: ConcertDTO[];
+} | null> {
+  const load = () => prisma.concert.findUnique({ where: { id }, select: CONCERT_DETAIL_SELECT });
+  let row = await load();
+  if (!row) return null;
+  if (row.source === 'QTICKETS' && !row.detailsFetchedAt && row.startsAt.getTime() > now.getTime() - DAY) {
+    await fetchConcertDetails(row);
+    row = (await load()) ?? row;
+  }
+  const day = mskDayStart(row.startsAt.getTime());
+  const [byArtist, sameDay] = await Promise.all([
+    row.artistId
+      ? prisma.concert.findMany({
+          where: { artistId: row.artistId, id: { not: row.id }, startsAt: { gte: new Date(now.getTime() - ONGOING_MS) } },
+          select: CONCERT_SELECT, orderBy: { startsAt: 'asc' }, take: 6,
+        })
+      : Promise.resolve([]),
+    prisma.concert.findMany({
+      where: {
+        AND: [sceneVisible, {
+          cityKey: row.cityKey, id: { not: row.id },
+          startsAt: { gte: new Date(Math.max(day, now.getTime() - ONGOING_MS)), lt: new Date(day + DAY + 6 * HOUR) },
+        }],
+      },
+      select: CONCERT_SELECT, orderBy: { startsAt: 'asc' }, take: 6,
+    }),
+  ]);
+  return {
+    concert: serializeConcertDetail(row),
+    moreByArtist: dedupeConcerts(byArtist).slice(0, 4).map(serializeConcert),
+    sameDay: dedupeConcerts(sameDay).slice(0, 4).map(serializeConcert),
+  };
 }
 
 // ─── Яндекс Музыка ───────────────────────────────────────────────────────────
@@ -395,7 +534,7 @@ export async function notifyNewConcerts(now = new Date(), limit = 200): Promise<
         type: 'scene_concert',
         title: `${c.artist.name}: концерт в ${c.cityName}`,
         body: [formatConcertLocal(c.startsAt, c.hasTime, c.utcOffsetMin), c.venue].filter(Boolean).join(' · '),
-        link: `/artist/${c.artistId}`,
+        link: `/concerts/${c.id}`,
       });
       sent++;
     }
@@ -459,7 +598,7 @@ export async function saveQticketsCity(
     const data = {
       artistId, title: it.title, type: it.type, startsAt: it.startsAt, hasTime: true, utcOffsetMin: it.utcOffsetMin,
       cityName, cityKey: key, venue: it.venue, url: it.url, ticketUrl: it.url,
-      imageUrl: it.imageUrl, priceFrom: it.priceFrom,
+      imageUrl: it.imageUrl, posterUrl: it.posterUrl, priceFrom: it.priceFrom,
     };
     const existing = await prisma.concert.findUnique({
       where: { source_externalId: { source: 'QTICKETS', externalId: it.externalId } },
@@ -529,9 +668,12 @@ export async function runQticketsImport(opts: { cities?: string[]; delayMs?: num
       await new Promise((r) => setTimeout(r, delayMs));
     }
     await notifyNewConcerts();
+    // Подробности для страниц концертов (описание, адрес, возраст) — новые события.
+    const details = await enrichQticketsDetails({ delayMs });
     const secs = Math.round((Date.now() - started) / 1000);
     const line = `🎫 Афиша Qtickets: городов ${summary.cities}, событий ${summary.events} (новых ${summary.created}, `
-      + `снято ${summary.removed}), артистов Moooza ${summary.matched}, не до конца ${summary.incomplete} (${secs}с)`;
+      + `снято ${summary.removed}), артистов Moooza ${summary.matched}, подробностей ${details}, `
+      + `не до конца ${summary.incomplete} (${secs}с)`;
     logger.info(`[scene] ${line}`);
     void tgLog(line);
     return summary;

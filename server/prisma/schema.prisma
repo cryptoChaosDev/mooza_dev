@@ -2001,6 +2001,15 @@ model Concert {
   ticketUrl   String?
   imageUrl    String?
   priceFrom   Int?
+  // Подробности для страницы концерта (/concerts/:id). Qtickets — со страницы
+  // события (lib/qtickets.parseQticketsEvent), дочитываются ночью и при открытии.
+  description String?
+  endsAt      DateTime?
+  ageLimit    String?
+  organizer   String?
+  // Крупная афиша (imageUrl — миниатюра для списков).
+  posterUrl   String?
+  detailsFetchedAt DateTime?
   createdById String?
   // Push подписчикам артиста о концерте в их городе уже отправлен.
   notifiedAt  DateTime?

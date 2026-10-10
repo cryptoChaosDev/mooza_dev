@@ -25,7 +25,20 @@ export interface QticketsItem {
   utcOffsetMin: number | null;
   venue: string | null;
   imageUrl: string | null;
+  /** Крупная версия афиши (наибольшая из image-set карточки). */
+  posterUrl: string | null;
   priceFrom: number | null;
+}
+
+/** Подробности со страницы события (JSON-LD Event + возраст из разметки). */
+export interface QticketsEventDetails {
+  description: string | null;
+  address: string | null;
+  endsAt: Date | null;
+  organizer: string | null;
+  ageLimit: string | null;
+  priceFrom: number | null;
+  imageUrl: string | null;
 }
 
 const ENTITIES: Record<string, string> = {
@@ -91,6 +104,12 @@ export function parseQticketsListing(html: string): { cityName: string | null; i
     if (!t || Number.isNaN(startsAt.getTime())) continue;
     const venue = /<span class="place-name">([\s\S]*?)<\/span>/.exec(b);
     const image = /url\('(https:\/\/cdn\.qtickets\.tech\/[^']+)'\)/.exec(b);
+    // image-set: url(&quot;…&quot;) 1x/2x/3x — для страницы концерта берём самую крупную.
+    let poster: { url: string; x: number } | null = null;
+    for (const m of b.matchAll(/url\(&quot;(https:\/\/cdn\.qtickets\.tech\/[^&]+)&quot;\)\s*(\d)x/g)) {
+      const x = Number(m[2]);
+      if (!poster || x > poster.x) poster = { url: m[1], x };
+    }
     // Цена — по тексту карточки: в разметке между разрядами бывает &nbsp;.
     const price = /от\s*([\d\s ]+?)\s*руб/.exec(text(b));
     const priceNum = price ? parseInt(price[1].replace(/[\s ]/g, ''), 10) : NaN;
@@ -103,10 +122,66 @@ export function parseQticketsListing(html: string): { cityName: string | null; i
       utcOffsetMin: isoOffsetMinutes(dt[1]),
       venue: venue ? text(venue[1]).slice(0, 300) || null : null,
       imageUrl: image ? image[1] : null,
+      posterUrl: poster?.url ?? (image ? image[1] : null),
       priceFrom: Number.isFinite(priceNum) ? priceNum : null,
     });
   }
   return { cityName: h1 ? text(h1[1]) : null, items, hasNext: /id="next_page"/.test(html) };
+}
+
+/** Описание события: без HTML, абзацы сохраняем, не длиннее 4000 символов. */
+function cleanDescription(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = decodeEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ' '))
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t\u00a0]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return s ? s.slice(0, 4000) : null;
+}
+
+/** Страница события Qtickets: JSON-LD Event и возрастное ограничение. Null — разметки нет. */
+export function parseQticketsEvent(html: string): QticketsEventDetails | null {
+  let ev: any = null;
+  for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(m[1]);
+      for (const o of Array.isArray(data) ? data : [data]) {
+        if (o && typeof o === 'object' && /Event$/.test(String(o['@type'] ?? ''))) { ev = o; break; }
+      }
+    } catch { /* битый блок — пропускаем */ }
+    if (ev) break;
+  }
+  if (!ev) return null;
+  const loc = ev.location ?? {};
+  const addr = typeof loc.address === 'string'
+    ? loc.address
+    : [loc.address?.streetAddress, loc.address?.addressLocality].filter((x: unknown) => typeof x === 'string' && x).join(', ');
+  const end = typeof ev.endDate === 'string' ? new Date(ev.endDate) : null;
+  const offers = Array.isArray(ev.offers) ? ev.offers : ev.offers ? [ev.offers] : [];
+  const prices = offers
+    .map((o: any) => Number(o?.lowPrice ?? o?.price))
+    .filter((n: number) => Number.isFinite(n) && n > 0);
+  const age = /<span class="place"[^>]*>\s*(\d{1,2}\+)\s*<\/span>/.exec(html);
+  const organizer = typeof ev.organizer?.name === 'string' ? text(ev.organizer.name) : '';
+  const image = typeof ev.image === 'string' && /^https:\/\/cdn\.qtickets\.tech\//.test(ev.image) ? ev.image : null;
+  return {
+    description: cleanDescription(ev.description),
+    address: addr ? text(addr).slice(0, 300) : null,
+    endsAt: end && !Number.isNaN(end.getTime()) ? end : null,
+    organizer: organizer ? organizer.slice(0, 200) : null,
+    ageLimit: age ? age[1] : null,
+    priceFrom: prices.length ? Math.min(...prices) : null,
+    imageUrl: image,
+  };
+}
+
+/** Подробности события по ссылке на его страницу (null — недоступно). */
+export async function fetchQticketsEventDetails(url: string, timeoutMs = 20_000): Promise<QticketsEventDetails | null> {
+  if (!/^https:\/\/[a-z0-9-]+\.qtickets\.events\//.test(url)) return null;
+  const html = await fetchHtml(url, timeoutMs);
+  return html ? parseQticketsEvent(html) : null;
 }
 
 /** Ссылка на событие с партнёрским кодом (env QTICKETS_PARTNER_QUERY), если он задан. */

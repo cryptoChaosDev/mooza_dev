@@ -22,6 +22,8 @@ jest.mock('../utils/telegram', () => ({ tgLog: jest.fn() }));
 jest.mock('../utils/logger', () => ({ __esModule: true, default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 const mockAccess = jest.fn();
 jest.mock('../lib/artistAccess', () => ({ getArtistAccess: (...a: unknown[]) => mockAccess(...a) }));
+const mockFetchDetails = jest.fn();
+jest.mock('../lib/qtickets', () => ({ ...jest.requireActual('../lib/qtickets'), fetchQticketsEventDetails: (...a: unknown[]) => mockFetchDetails(...a) }));
 jest.mock('../middleware/auth', () => ({
   authenticate: (req: any, res: any, next: any) => {
     if (!req.headers['x-user']) return res.status(401).json({ error: 'auth' });
@@ -34,7 +36,7 @@ jest.mock('../middleware/rateLimiter', () => ({ guestReadLimiter: (_req: any, _r
 
 import {
   periodRange, dedupeConcerts, matchArtist, normName, verifiedArtistNameIndex, syncYmConcerts,
-  saveQticketsCity, notifyNewConcerts, citySlug, ymConcertStart, formatConcertLocal, localIso,
+  saveQticketsCity, notifyNewConcerts, citySlug, ymConcertStart, formatConcertLocal, localIso, getConcertDetail,
 } from '../lib/sceneConcerts';
 import { isoOffsetMinutes } from '../lib/qtickets';
 import sceneRoutes from '../routes/scene';
@@ -133,7 +135,7 @@ describe('syncYmConcerts', () => {
 describe('saveQticketsCity', () => {
   const item = (id: string, title: string) => ({
     externalId: id, url: `https://samara.qtickets.events/${id}-x`, title, type: 'Концерт',
-    startsAt: new Date('2026-11-01T15:00:00Z'), utcOffsetMin: 240, venue: 'Клуб', imageUrl: null, priceFrom: 500,
+    startsAt: new Date('2026-11-01T15:00:00Z'), utcOffsetMin: 240, venue: 'Клуб', imageUrl: null, posterUrl: null, priceFrom: 500,
   });
   const idx = new Map([['полумягкие', 'a1']]);
 
@@ -168,7 +170,7 @@ describe('notifyNewConcerts', () => {
       where: { artistId: 'a1', user: { cityNorm: 'самара' } }, select: { userId: true },
     });
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'u1', type: 'scene_concert', title: 'Kursha: концерт в Самара', link: '/artist/a1',
+      userId: 'u1', type: 'scene_concert', title: 'Kursha: концерт в Самара', link: '/concerts/c1',
     }));
   });
 
@@ -239,5 +241,51 @@ describe('местное время концерта', () => {
     expect(formatConcertLocal(at, false, 240)).toBe('13 ноября');
     expect(localIso(at, 240)).toBe('2026-11-13T19:00:00+04:00');
     expect(localIso(at, null)).toBe('2026-11-13T18:00:00+03:00');
+  });
+});
+
+describe('страница концерта', () => {
+  const ID = '11111111-2222-3333-4444-555555555555';
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: ID, source: 'QTICKETS', title: 'Boulevard Depo', type: 'Концерт', startsAt: new Date(Date.now() + 5 * 864e5),
+    hasTime: true, utcOffsetMin: 240, cityName: 'Самара', cityKey: 'самара', venue: 'Клуб', address: null,
+    url: 'https://samara.qtickets.events/1-x', ticketUrl: 'https://samara.qtickets.events/1-x', imageUrl: 'https://cdn.qtickets.tech/t.jpg',
+    priceFrom: 900, artistId: null, artist: null, description: null, endsAt: null, ageLimit: null, organizer: null,
+    posterUrl: 'https://cdn.qtickets.tech/p.jpg', detailsFetchedAt: null, ...over,
+  });
+
+  it('подробности Qtickets дочитываются при первом открытии и сохраняются', async () => {
+    mockPrisma.concert.findUnique
+      .mockResolvedValueOnce(row())
+      .mockResolvedValueOnce(row({ description: 'Тур', ageLimit: '16+', detailsFetchedAt: new Date() }));
+    mockFetchDetails.mockResolvedValue({ description: 'Тур', address: 'ул. Ленина, 1', endsAt: null, organizer: 'Waves', ageLimit: '16+', priceFrom: 1900, imageUrl: null });
+    const d = await getConcertDetail(ID);
+    expect(mockFetchDetails).toHaveBeenCalledWith('https://samara.qtickets.events/1-x', 8000);
+    expect(mockPrisma.concert.update).toHaveBeenCalledWith({ where: { id: ID }, data: expect.objectContaining({
+      description: 'Тур', ageLimit: '16+', organizer: 'Waves', priceFrom: 1900, detailsFetchedAt: expect.any(Date),
+    }) });
+    expect(d?.concert).toEqual(expect.objectContaining({ description: 'Тур', ageLimit: '16+', posterUrl: 'https://cdn.qtickets.tech/p.jpg', onScene: true }));
+  });
+
+  it('уже дочитанный — без запроса к Qtickets; недоступная страница — помечаем, чтобы не долбить', async () => {
+    mockPrisma.concert.findUnique.mockResolvedValue(row({ detailsFetchedAt: new Date() }));
+    await getConcertDetail(ID);
+    expect(mockFetchDetails).not.toHaveBeenCalled();
+
+    mockPrisma.concert.findUnique.mockResolvedValue(row());
+    mockFetchDetails.mockResolvedValue(null);
+    await getConcertDetail(ID);
+    expect(mockPrisma.concert.update).toHaveBeenCalledWith({ where: { id: ID }, data: { detailsFetchedAt: expect.any(Date) } });
+  });
+
+  it('GET /api/scene/concerts/:id — 404 для чужого id и несуществующего, 200 с подробностями', async () => {
+    expect((await request(app).get('/api/scene/concerts/not-a-uuid')).status).toBe(404);
+    mockPrisma.concert.findUnique.mockResolvedValue(null);
+    expect((await request(app).get(`/api/scene/concerts/${ID}`)).status).toBe(404);
+    mockPrisma.concert.findUnique.mockResolvedValue(row({ source: 'MANUAL', url: null }));
+    const res = await request(app).get(`/api/scene/concerts/${ID}`);
+    expect(res.status).toBe(200);
+    expect(res.body.concert).toEqual(expect.objectContaining({ id: ID, startsAt: expect.stringMatching(/\+04:00$/) }));
+    expect(res.body).toEqual(expect.objectContaining({ moreByArtist: [], sameDay: [] }));
   });
 });

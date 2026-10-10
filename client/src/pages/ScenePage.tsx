@@ -265,7 +265,7 @@ function ConcertCard({ c, showCity }: { c: SceneConcert; showCity: boolean }) {
   const where = [c.venue, showCity ? c.cityName : null].filter(Boolean).join(' · ');
   return (
     <article className="flex gap-3 p-3 bg-slate-900/60 border border-slate-800/60 rounded-2xl">
-      <div className="w-[72px] h-[72px] flex-shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
+      <Link to={`/concerts/${c.id}`} aria-hidden tabIndex={-1} className="w-[72px] h-[72px] flex-shrink-0 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
         {c.imageUrl ? (
           <img src={c.imageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : c.artist?.avatar ? (
@@ -273,9 +273,11 @@ function ConcertCard({ c, showCity }: { c: SceneConcert; showCity: boolean }) {
         ) : (
           <Music2 size={24} className="text-slate-600" />
         )}
-      </div>
+      </Link>
       <div className="flex-1 min-w-0">
-        <h3 className="text-[15px] font-semibold text-white leading-snug line-clamp-2">{c.title}</h3>
+        <h3 className="text-[15px] font-semibold text-white leading-snug line-clamp-2">
+          <Link to={`/concerts/${c.id}`} className="hover:text-primary-200">{c.title}</Link>
+        </h3>
         {c.artist && (
           <Link to={artistHref(c.artist)} className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary-300 hover:text-primary-200">
             {c.artist.verified && <BadgeCheck size={12} />} {c.artist.name} на Moooza <ChevronRight size={12} />
@@ -298,6 +300,9 @@ function ConcertCard({ c, showCity }: { c: SceneConcert; showCity: boolean }) {
             </a>
           )}
           {price && <span className="text-xs text-slate-300">{price}</span>}
+          <Link to={`/concerts/${c.id}`} className="h-9 px-2.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 inline-flex items-center">
+            Подробнее
+          </Link>
           <span className="ml-auto text-[10px] text-slate-600">{SOURCE_LABEL[c.source]}</span>
         </div>
       </div>

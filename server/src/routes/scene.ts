@@ -7,7 +7,7 @@ import { guestReadLimiter } from '../middleware/rateLimiter';
 import { getArtistAccess } from '../lib/artistAccess';
 import { cityKey } from '../lib/qtickets';
 import {
-  SCENE_PERIODS, ScenePeriod, cityUtcOffset, listArtistConcerts, listSceneCities, listSceneConcerts,
+  SCENE_PERIODS, ScenePeriod, cityUtcOffset, getConcertDetail, listArtistConcerts, listSceneCities, listSceneConcerts,
   notifyNewConcerts, resolveSceneCity,
 } from '../lib/sceneConcerts';
 
@@ -41,6 +41,18 @@ router.get('/concerts', optionalAuthenticate, guestReadLimiter, async (req: Auth
     const data = await listSceneConcerts({ cityKey: city?.key ?? null, period, page, limit });
     return res.json({ city: city ? { slug: city.slug, name: city.name } : null, period, ...data });
   } catch (err) { return fail500(res, 'GET /concerts', err); }
+});
+
+// GET /api/scene/concerts/:id — страница концерта: подробности + ещё концерты
+// артиста и концерты города в тот же день.
+router.get('/concerts/:id', optionalAuthenticate, guestReadLimiter, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(404).json({ error: 'Концерт не найден' });
+    const data = await getConcertDetail(id);
+    if (!data) return res.status(404).json({ error: 'Концерт не найден' });
+    return res.json(data);
+  } catch (err) { return fail500(res, 'GET /concerts/:id', err); }
 });
 
 // GET /api/scene/artist/:id/concerts — предстоящие концерты артиста (визитка).

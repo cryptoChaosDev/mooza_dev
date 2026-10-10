@@ -1,5 +1,5 @@
 /** Разбор афиши Qtickets (lib/qtickets): города, карточки ленты, ссылки. */
-import { parseQticketsCities, parseQticketsListing, qticketsTicketUrl, decodeEntities, cityKey } from '../lib/qtickets';
+import { parseQticketsCities, parseQticketsListing, parseQticketsEvent, qticketsTicketUrl, decodeEntities, cityKey } from '../lib/qtickets';
 
 const card = (o: { id: string; title: string; type: string; dt: string; place?: string; price?: string; img?: boolean }) => `
   <li class="item"> <section>
@@ -47,6 +47,7 @@ describe('parseQticketsListing', () => {
       venue: 'Клуб Метелица-С',
       priceFrom: 1500,
       imageUrl: 'https://cdn.qtickets.tech/thumbs/225258_360.webp',
+      posterUrl: 'https://cdn.qtickets.tech/thumbs/225258_720.webp',
     }));
     expect(it.startsAt.toISOString()).toBe('2026-11-01T15:00:00.000Z');
     expect(it.utcOffsetMin).toBe(240);
@@ -82,5 +83,41 @@ describe('ссылки и сущности', () => {
 
   it('раскрывает именованные и числовые сущности', () => {
     expect(decodeEntities('A&nbsp;&amp;&#1041;&#x411;&laquo;&raquo;&unknown;')).toBe('A &ББ«»&unknown;');
+  });
+});
+
+describe('parseQticketsEvent', () => {
+  const page = (ld: unknown, extra = '') => `<html><head>
+    <script type="application/ld+json">[{"@type":"WebSite","name":"Qtickets"}, ${JSON.stringify(ld)}]</script></head>
+    <body><h1>X</h1><div class="event-info"><a class="event-info__name place">Клуб</a> <span class="place">16+</span></div>${extra}</body></html>`;
+
+  it('описание, адрес, окончание, организатор, возраст, минимальная цена, картинка', () => {
+    const d = parseQticketsEvent(page({
+      '@type': 'Event', name: 'Boulevard Depo',
+      description: 'Тур <b>а-ля карт</b>\r\n\r\n\r\nВ меню тура &laquo;лучшее&raquo;',
+      location: { '@type': 'Place', name: 'Клуб', address: 'ул. Революционная, 146, Самара, Россия' },
+      offers: [{ '@type': 'Offer', price: 2400 }, { '@type': 'Offer', price: 1900 }],
+      organizer: { '@type': 'Organization', name: 'Waves Booking' },
+      startDate: '2026-11-01T20:00:00+04:00', endDate: '2026-11-01T22:00:00+04:00',
+      image: 'https://cdn.qtickets.tech/thumbs/1_445.jpg',
+    }));
+    expect(d).toEqual({
+      description: 'Тур а-ля карт\n\nВ меню тура «лучшее»',
+      address: 'ул. Революционная, 146, Самара, Россия',
+      endsAt: new Date('2026-11-01T18:00:00.000Z'),
+      organizer: 'Waves Booking',
+      ageLimit: '16+',
+      priceFrom: 1900,
+      imageUrl: 'https://cdn.qtickets.tech/thumbs/1_445.jpg',
+    });
+  });
+
+  it('адрес из PostalAddress, чужая картинка не берётся; без разметки события — null', () => {
+    const d = parseQticketsEvent(page({
+      '@type': 'Event', location: { address: { streetAddress: 'Ленина, 1', addressLocality: 'Казань' } },
+      image: 'https://evil.example/x.jpg',
+    }));
+    expect(d).toEqual(expect.objectContaining({ address: 'Ленина, 1, Казань', imageUrl: null, description: null }));
+    expect(parseQticketsEvent('<html>нет разметки</html>')).toBeNull();
   });
 });

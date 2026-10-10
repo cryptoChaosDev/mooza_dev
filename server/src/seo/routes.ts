@@ -23,11 +23,11 @@ import { renderOrder, renderVacancy } from './render/deals';
 import { renderLineup } from './render/lineup';
 import { renderFeed, renderHome, renderSearch, CATALOG_TABS, CatalogTab } from './render/lists';
 import { renderStaticDoc } from './render/static';
-import { renderSceneIndex, renderSceneCity } from './render/scene';
+import { renderSceneIndex, renderSceneCity, renderConcert } from './render/scene';
 
 export type SeoRouteKind =
   | 'home' | 'feed' | 'search' | 'artist' | 'release' | 'clip' | 'profile'
-  | 'service' | 'order' | 'vacancy' | 'lineup' | 'privacy' | 'terms' | 'scene' | 'scene_city';
+  | 'service' | 'order' | 'vacancy' | 'lineup' | 'privacy' | 'terms' | 'scene' | 'scene_city' | 'concert';
 
 export interface SeoRouteMatch {
   kind: SeoRouteKind;
@@ -82,7 +82,7 @@ function decodeSegment(seg: string): string | null {
   }
 }
 
-type EntityKind = 'artist' | 'release' | 'clip' | 'profile' | 'service' | 'order' | 'vacancy' | 'lineup';
+type EntityKind = 'artist' | 'release' | 'clip' | 'profile' | 'service' | 'order' | 'vacancy' | 'lineup' | 'concert';
 
 const ENTITY_ROUTES: Array<{ re: RegExp; kind: EntityKind; render: (key: string) => Promise<RenderOutcome> }> = [
   { re: /^\/artist\/([^/]+)$/, kind: 'artist', render: renderArtist },
@@ -93,6 +93,7 @@ const ENTITY_ROUTES: Array<{ re: RegExp; kind: EntityKind; render: (key: string)
   { re: /^\/orders\/([^/]+)$/, kind: 'order', render: renderOrder },
   { re: /^\/vacancies\/([^/]+)$/, kind: 'vacancy', render: renderVacancy },
   { re: /^\/lineups\/([^/]+)$/, kind: 'lineup', render: renderLineup },
+  { re: /^\/concerts\/([^/]+)$/, kind: 'concert', render: renderConcert },
 ];
 
 /**

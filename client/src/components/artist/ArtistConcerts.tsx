@@ -42,6 +42,8 @@ interface ConcertView {
   place: string | null;
   ticketsHref: string | undefined;
   citySlug: string | null;
+  /** Страница концерта (есть у концертов «Сцены»). */
+  href: string | null;
   /** id концерта, добавленного вручную (можно удалить). */
   manualId: string | null;
 }
@@ -96,6 +98,7 @@ function fromYm(list: UpcomingConcert[]): ConcertView[] {
       place: c.place,
       ticketsHref: c.ticketsHref,
       citySlug: null,
+      href: null,
       manualId: null,
     };
   });
@@ -115,6 +118,7 @@ function fromScene(items: SceneConcert[]): ConcertView[] {
       place: c.venue ?? c.address,
       ticketsHref: safeHref(c.ticketUrl) ?? safeHref(c.url),
       citySlug: c.citySlug,
+      href: `/concerts/${c.id}`,
       manualId: c.source === 'MANUAL' ? c.id : null,
     };
   });
@@ -132,8 +136,8 @@ function ConcertRow({ c, artistId, artistName, onDelete }: {
         <p className="text-[10px] text-emerald-300/90 leading-tight">{c.sub}{c.time ? ` · ${c.time}` : ''}</p>
       </div>
       <div className="flex-1 min-w-0">
-        {c.city && c.citySlug ? (
-          <Link to={`/scene/${c.citySlug}`} className="block text-sm font-semibold text-white truncate hover:text-primary-300">{c.city}</Link>
+        {c.city && c.href ? (
+          <Link to={c.href} className="block text-sm font-semibold text-white truncate hover:text-primary-300">{c.city}</Link>
         ) : (
           <p className="text-sm font-semibold text-white truncate">{c.city ?? title ?? 'Концерт'}</p>
         )}
