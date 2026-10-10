@@ -447,7 +447,7 @@ function ConcertCard({ c, showCity, showDate = false }: { c: SceneConcert; showC
           </Link>
         )}
         <p className="mt-1 text-xs text-slate-400 flex items-center gap-1 min-w-0">
-          {time && <><Clock size={11} className="flex-shrink-0" /> <span className="tabular-nums">{time}</span></>}
+          {time && <><Clock size={11} className="flex-shrink-0" /> <span className="tabular-nums whitespace-nowrap">{time}</span></>}
           {where && <><MapPin size={11} className="flex-shrink-0 ml-1" /> <span className="truncate">{where}</span></>}
         </p>
         <div className="mt-2 flex items-center gap-2">
