@@ -283,7 +283,7 @@ export default function ArtistCreatePage() {
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* Header */}
       <div
-        className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800"
+        className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800"
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
       >
         <div className="flex items-center justify-between px-4 py-3">

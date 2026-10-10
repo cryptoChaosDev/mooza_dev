@@ -139,7 +139,7 @@ export default function ScenePage() {
     <div className="min-h-screen min-h-[100dvh] bg-slate-950 pb-28">
       <div className="max-w-2xl mx-auto">
         {/* Шапка: заголовок и поиск (sticky — см. overflow-x в index.css) */}
-        <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        <div className="sticky top-app z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-3.5 pb-2 flex items-center gap-2">
             <Ticket size={20} className="text-primary-400 flex-shrink-0" />
             <div className="min-w-0 flex-1">

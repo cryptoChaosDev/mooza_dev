@@ -46,7 +46,7 @@ export default function ArtistInvitePage() {
     <div className="min-h-screen bg-slate-950 pb-28">
       {/* Липкая шапка — как ArtistEditPage */}
       <div
-        className="sticky top-0 z-10 bg-slate-950/95 border-b border-slate-800/60"
+        className="sticky top-app z-10 bg-slate-950/95 border-b border-slate-800/60"
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
@@ -103,7 +103,7 @@ export default function ArtistInvitePage() {
 
         {/* Действия — липкий низ как ArtistEditPage */}
         <div
-          className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-slate-950/95 border-t border-slate-800/60 flex gap-2"
+          className="sticky bottom-app -mx-4 px-4 pt-3 pb-2 bg-slate-950/95 border-t border-slate-800/60 flex gap-2"
           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
         >
           <button

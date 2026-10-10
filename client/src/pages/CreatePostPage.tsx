@@ -266,7 +266,7 @@ export default function CreatePostPage() {
       <div className="max-w-2xl w-full mx-auto flex flex-col flex-1">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-2">
+        <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-2">
           <button
             onClick={handleCancel}
             aria-label="Назад"

@@ -259,7 +259,7 @@ export default function ServiceFormPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 pb-28">
-      <div className="sticky top-0 z-10 bg-slate-950/95 border-b border-slate-800/60"
+      <div className="sticky top-app z-10 bg-slate-950/95 border-b border-slate-800/60"
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}>
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-1.5 -ml-1 text-slate-400 hover:text-white transition-colors">
@@ -439,7 +439,7 @@ export default function ServiceFormPage() {
         </div>
 
         {/* Действия */}
-        <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-slate-950/95 border-t border-slate-800/60 flex flex-col gap-2"
+        <div className="sticky bottom-app -mx-4 px-4 pt-3 pb-2 bg-slate-950/95 border-t border-slate-800/60 flex flex-col gap-2"
           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}>
           <div className="flex gap-2">
             <button onClick={() => navigate(-1)} className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">

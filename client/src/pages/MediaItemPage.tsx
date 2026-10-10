@@ -166,7 +166,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* Top bar */}
       <div
-        className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 sticky top-0 z-20 bg-slate-950/90 backdrop-blur"
+        className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 sticky top-app z-20 bg-slate-950/90 backdrop-blur"
         style={{ paddingTop: 'max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
       >
         <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white" aria-label="Назад">

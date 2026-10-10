@@ -81,7 +81,7 @@ export default function ReviewsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 pb-28">
-      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800/60 px-4 py-3 flex items-center gap-3"
+      <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800/60 px-4 py-3 flex items-center gap-3"
         style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
         <button onClick={() => navigate(-1)} className="p-1.5 -ml-1 text-slate-400 hover:text-white transition-colors">
           <ChevronLeft size={22} />

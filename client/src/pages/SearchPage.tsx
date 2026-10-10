@@ -627,7 +627,7 @@ export default function SearchPage() {
     <div className="min-h-screen min-h-[100dvh] bg-slate-950">
 
       {/* ── Sticky header ── */}
-      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+      <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-3 space-y-3">
 
           {/* Title */}

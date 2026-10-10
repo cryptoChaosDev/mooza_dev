@@ -1521,7 +1521,7 @@ export default function FeedPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 py-3.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Zap size={20} className="text-primary-400 flex-shrink-0" />

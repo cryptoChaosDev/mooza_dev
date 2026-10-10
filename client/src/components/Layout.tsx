@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef, type CSSProperties } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn, CalendarDays, Ticket } from 'lucide-react';
 import { APP_VERSION } from '../lib/changelog';
@@ -115,6 +115,21 @@ export default function Layout({ children }: LayoutProps) {
   // «Сцена» активна и на странице города (/scene/:city).
   const isActive = (path: string) => location.pathname === path || (path === '/scene' && location.pathname.startsWith('/scene/'));
 
+  // Высота мобильной шапки (баннер уведомлений, safe area; на lg — 0) → --app-top:
+  // липкие шапки страниц (.top-app) встают под неё, а не прячутся за ней.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', update);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', update); };
+  }, [location.pathname]); // на полноэкранных страницах шапки нет — переподключаемся при смене пути
+
   // Full-screen pages bypass all Layout chrome: онбординг, экраны входа и
   // лендинг гостя (у них своя вёрстка на весь экран).
   const FULLSCREEN_PATHS = ['/onboarding', '/login', '/register', '/forgot-password'];
@@ -123,9 +138,9 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
+    <div className="app-shell min-h-screen min-h-[100dvh] bg-slate-950" style={{ '--app-top': `${headerH}px` } as CSSProperties}>
       {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}
-      <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+      <div ref={headerRef} className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         {/* Notification permission banner */}
         {notifPending && (
           <div className="bg-primary-600/90 px-4 py-2 flex items-center justify-between gap-3">

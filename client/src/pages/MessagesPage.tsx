@@ -280,7 +280,7 @@ export default function MessagesPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-4 pb-3">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">

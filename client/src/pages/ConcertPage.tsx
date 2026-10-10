@@ -79,7 +79,7 @@ export default function ConcertPage() {
     <div className="min-h-screen min-h-[100dvh] bg-slate-950 pb-28">
       <div className="max-w-2xl mx-auto">
         {/* Шапка */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-2 py-2 flex items-center gap-1">
+        <div className="sticky top-app z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-2 py-2 flex items-center gap-1">
           <button onClick={back} aria-label="Назад" className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-400 hover:text-white">
             <ArrowLeft size={22} />
           </button>

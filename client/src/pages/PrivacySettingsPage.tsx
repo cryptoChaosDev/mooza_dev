@@ -147,7 +147,7 @@ export default function PrivacySettingsPage() {
     <div className="min-h-screen bg-slate-950 pb-28">
       {/* Липкая шапка + вкладки — как /services и /orders */}
       <div
-        className="sticky top-0 z-10 bg-slate-950/95 border-b border-slate-800/60"
+        className="sticky top-app z-10 bg-slate-950/95 border-b border-slate-800/60"
         style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 space-y-3">

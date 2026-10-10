@@ -42,7 +42,22 @@ body {
   background: #020617;
   color: #f1f5f9;
   overflow-x: hidden;
+  /* clip режет так же, но не делает body контейнером прокрутки: при hidden на html и
+     body body становился отдельным скроллером, и position: sticky нигде не работал
+     (шапки страниц, панель «Отмена/Сохранить»). Старые браузеры берут hidden выше. */
+  overflow-x: clip;
   max-width: 100%;
+}
+
+/* Высота нижнего меню (60px + safe area) и плашки гостя — для .bottom-app. */
+.app-shell {
+  --app-bottom: calc(60px + env(safe-area-inset-bottom, 0px) + var(--guest-banner-h, 0px));
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    --app-bottom: var(--guest-banner-h, 0px);
+  }
 }
 
 #root {
@@ -163,6 +178,16 @@ html.android-no-backdrop-blur .blur-3xl {
 
 /* Glass morphism utilities */
 @layer utilities {
+  /* Липкие шапки и панели страниц внутри Layout: под мобильной шапкой (--app-top
+     меряет Layout) и над нижним меню с плашкой гостя (--app-bottom, .app-shell). */
+  .top-app {
+    top: var(--app-top, 0px);
+  }
+
+  .bottom-app {
+    bottom: var(--app-bottom, 0px);
+  }
+
   .glass {
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(12px);

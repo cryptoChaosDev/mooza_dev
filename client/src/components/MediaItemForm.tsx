@@ -633,7 +633,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
         <div className="space-y-4">{formFields}</div>
 
         <div
-          className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 mt-4 bg-slate-950/95 border-t border-slate-800/60 flex gap-2"
+          className="sticky bottom-app -mx-4 px-4 pt-3 pb-2 mt-4 bg-slate-950/95 border-t border-slate-800/60 flex gap-2"
           style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
         >
           <button
