@@ -21,6 +21,8 @@ interface Notification {
   read: boolean;
   createdAt: string;
   actor?: { id: string; firstName: string; lastName: string; avatar?: string };
+  /** Картинка системного уведомления (афиша концерта «Сцены»). */
+  imageUrl?: string | null;
 }
 
 type Group = {
@@ -131,18 +133,35 @@ function groupNotifications(notifications: Notification[]): Group[] {
 }
 
 // ── Single notification row ────────────────────────────────────────────────
+/**
+ * Картинка строки: аватар отправителя; у системных уведомлений — их картинка
+ * (афиша концерта) или иконка типа, а не пустой «?».
+ */
+function NotifPicture({ n, actor }: { n: Notification; actor: Notification['actor'] }) {
+  if (actor) return <AvatarComponent src={actor.avatar ?? null} name={`${actor.firstName} ${actor.lastName}`} size={42} />;
+  if (n.imageUrl) {
+    return <img src={n.imageUrl} alt="" loading="lazy" className="w-[42px] h-[42px] rounded-xl object-cover bg-slate-800" />;
+  }
+  return (
+    <span className="w-[42px] h-[42px] rounded-full bg-slate-800 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+      {typeIcon(n.type)}
+    </span>
+  );
+}
+
 function SingleRow({ n, actor, onClick }: { n: Notification; actor: Notification['actor']; onClick: () => void }) {
-  const name = actor ? `${actor.firstName} ${actor.lastName}` : '?';
   return (
     <button
       onClick={onClick}
       className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-slate-800/40 active:bg-slate-800/60 transition-colors ${!n.read ? 'bg-primary-500/5' : ''}`}
     >
       <div className="relative shrink-0 mt-0.5">
-        <AvatarComponent src={actor?.avatar ?? null} name={name} size={42} />
-        <span className="absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5 shadow">
-          {typeIcon(n.type)}
-        </span>
+        <NotifPicture n={n} actor={actor} />
+        {(actor || n.imageUrl) && (
+          <span className="absolute -bottom-1 -right-1 bg-slate-950 rounded-full p-0.5 shadow">
+            {typeIcon(n.type)}
+          </span>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className={`text-sm leading-snug ${!n.read ? 'text-white font-semibold' : 'text-slate-300'}`}>

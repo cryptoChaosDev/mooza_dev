@@ -7,8 +7,8 @@ import { guestReadLimiter } from '../middleware/rateLimiter';
 import { getArtistAccess } from '../lib/artistAccess';
 import { cityKey } from '../lib/qtickets';
 import {
-  SCENE_PERIODS, ScenePeriod, cityUtcOffset, getConcertDetail, listArtistConcerts, listSceneCities, listSceneConcerts,
-  notifyNewConcerts, resolveSceneCity,
+  SCENE_PERIODS, SCENE_SORTS, ScenePeriod, SceneSort, cityUtcOffset, getConcertDetail, listArtistConcerts,
+  listSceneCities, listSceneConcerts, notifyNewConcerts, resolveSceneCity,
 } from '../lib/sceneConcerts';
 
 const router = Router();
@@ -26,6 +26,7 @@ router.get('/cities', optionalAuthenticate, guestReadLimiter, async (_req, res) 
 });
 
 // GET /api/scene/concerts?city=<slug>&period=today|weekend|week|month|all&page=&limit=
+//   &q=<текст>&type=Концерт,Фестиваль&priceMax=1000&moooza=1&sort=date|price_asc|price_desc|new
 router.get('/concerts', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
     const q = req.query as Record<string, string | undefined>;
@@ -38,8 +39,16 @@ router.get('/concerts', optionalAuthenticate, guestReadLimiter, async (req: Auth
     // Гостю — неглубокая выдача (как у лайнапов): листать всю афишу — после входа.
     const page = Math.min(req.userId ? 50 : 10, Math.max(1, parseInt(q.page ?? '1', 10) || 1));
     const limit = Math.min(req.userId ? 50 : 20, Math.max(1, parseInt(q.limit ?? '20', 10) || 20));
-    const data = await listSceneConcerts({ cityKey: city?.key ?? null, period, page, limit });
-    return res.json({ city: city ? { slug: city.slug, name: city.name } : null, period, ...data });
+    const sort: SceneSort = (SCENE_SORTS as readonly string[]).includes(q.sort ?? '') ? (q.sort as SceneSort) : 'date';
+    const priceMax = parseInt(q.priceMax ?? '', 10);
+    const filters = {
+      q: typeof q.q === 'string' ? q.q : null,
+      types: typeof q.type === 'string' ? q.type.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 10) : [],
+      priceMax: Number.isFinite(priceMax) && priceMax > 0 ? Math.min(priceMax, 1_000_000) : null,
+      mooozaOnly: q.moooza === '1' || q.moooza === 'true',
+    };
+    const data = await listSceneConcerts({ cityKey: city?.key ?? null, period, page, limit, filters, sort });
+    return res.json({ city: city ? { slug: city.slug, name: city.name } : null, period, sort, ...data });
   } catch (err) { return fail500(res, 'GET /concerts', err); }
 });
 

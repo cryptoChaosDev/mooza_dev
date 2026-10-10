@@ -232,18 +232,68 @@ export async function resolveSceneCity(slug: string, now = new Date()): Promise<
 }
 
 /** Концерты для «Сцены»: город (ключ) или вся страна, период, страница. */
+/** Типы событий «Сцены» (фильтр): Qtickets + «Концерт» у ЯМ и добавленных вручную. */
+export const SCENE_TYPES = ['Концерт', 'Фестиваль', 'Рейв', 'Вечеринка'] as const;
+export const SCENE_SORTS = ['date', 'price_asc', 'price_desc', 'new'] as const;
+export type SceneSort = (typeof SCENE_SORTS)[number];
+
+export interface SceneFilters {
+  /** Название события, артист или площадка (без учёта регистра). */
+  q?: string | null;
+  types?: string[];
+  /** Цена «до N ₽»: события без цены не попадают. */
+  priceMax?: number | null;
+  /** Только концерты артистов Moooza. */
+  mooozaOnly?: boolean;
+}
+
+/** Условия фильтров «Сцены» (без города и периода). */
+export function sceneFilterWhere(f: SceneFilters): Prisma.ConcertWhereInput[] {
+  const and: Prisma.ConcertWhereInput[] = [];
+  const q = f.q?.trim().slice(0, 100);
+  if (q) {
+    and.push({
+      OR: [
+        { title: { contains: q, mode: 'insensitive' } },
+        { venue: { contains: q, mode: 'insensitive' } },
+        { artist: { name: { contains: q, mode: 'insensitive' } } },
+      ],
+    });
+  }
+  const types = (f.types ?? []).filter((t) => (SCENE_TYPES as readonly string[]).includes(t));
+  if (types.length) and.push({ type: { in: types } });
+  if (f.priceMax != null && f.priceMax > 0) and.push({ priceFrom: { not: null, lte: f.priceMax } });
+  if (f.mooozaOnly) and.push({ artistId: { not: null } });
+  return and;
+}
+
+/** Сортировка ленты: по дате; по цене (без цены — в конце); новые в афише. */
+function sceneOrderBy(sort: SceneSort): Prisma.ConcertOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'price_asc': return [{ priceFrom: { sort: 'asc', nulls: 'last' } }, { startsAt: 'asc' }, { id: 'asc' }];
+    case 'price_desc': return [{ priceFrom: { sort: 'desc', nulls: 'last' } }, { startsAt: 'asc' }, { id: 'asc' }];
+    case 'new': return [{ createdAt: 'desc' }, { startsAt: 'asc' }, { id: 'asc' }];
+    default: return [{ startsAt: 'asc' }, { id: 'asc' }];
+  }
+}
+
 export async function listSceneConcerts(opts: {
   cityKey?: string | null; period?: ScenePeriod; page?: number; limit?: number; now?: Date;
+  filters?: SceneFilters; sort?: SceneSort;
 }): Promise<{ items: ConcertDTO[]; page: number; hasMore: boolean; total: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(50, Math.max(1, opts.limit ?? 20));
   const { from, to } = periodRange(opts.period ?? 'all', opts.now);
   const where: Prisma.ConcertWhereInput = {
-    AND: [sceneVisible, { startsAt: { gte: from, lt: to } }, ...(opts.cityKey ? [{ cityKey: opts.cityKey }] : [])],
+    AND: [
+      sceneVisible, { startsAt: { gte: from, lt: to } },
+      ...(opts.cityKey ? [{ cityKey: opts.cityKey }] : []),
+      ...sceneFilterWhere(opts.filters ?? {}),
+    ],
   };
   const [rows, total] = await Promise.all([
     prisma.concert.findMany({
-      where, select: CONCERT_SELECT, orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      where, select: CONCERT_SELECT, orderBy: sceneOrderBy(opts.sort ?? 'date'),
       skip: (page - 1) * limit, take: limit + 1,
     }),
     prisma.concert.count({ where }),
@@ -559,7 +609,7 @@ export async function notifyNewConcerts(now = new Date(), limit = 200): Promise<
     where: { artistId: { not: null }, notifiedAt: null, startsAt: { gt: now } },
     select: {
       id: true, artistId: true, startsAt: true, hasTime: true, utcOffsetMin: true, cityName: true, cityKey: true, venue: true,
-      artist: { select: { name: true } },
+      imageUrl: true, artist: { select: { name: true, avatar: true } },
     },
     orderBy: { startsAt: 'asc' },
     take: limit,
@@ -594,6 +644,8 @@ export async function notifyNewConcerts(now = new Date(), limit = 200): Promise<
         title: `${c.artist.name}: концерт в ${c.cityName}`,
         body: [formatConcertLocal(c.startsAt, c.hasTime, c.utcOffsetMin), c.venue].filter(Boolean).join(' · '),
         link: `/concerts/${c.id}`,
+        // Афиша концерта (или аватар артиста) — в колокольчике вместо пустого «?».
+        imageUrl: c.imageUrl ?? c.artist.avatar ?? null,
       });
       sent++;
     }

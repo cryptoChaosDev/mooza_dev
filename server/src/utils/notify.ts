@@ -10,6 +10,8 @@ export interface NotifyOpts {
   title: string;
   body?: string;
   link?: string;
+  /** Картинка уведомления без отправителя (афиша концерта): колокольчик + большая картинка в push. */
+  imageUrl?: string | null;
 }
 
 // ── Пользовательские настройки уведомлений ────────────────────────────────────
@@ -76,6 +78,7 @@ export async function notify(opts: NotifyOpts): Promise<void> {
         title: opts.title,
         body: opts.body ?? '',
         link: opts.link,
+        imageUrl: opts.imageUrl ?? null,
       },
       include: {
         actor: { select: { id: true, firstName: true, lastName: true, avatar: true } },
@@ -100,6 +103,7 @@ export async function notify(opts: NotifyOpts): Promise<void> {
             title: opts.title,
             body: opts.body ?? '',
             link: opts.link,
+            ...(opts.imageUrl ? { image: opts.imageUrl } : {}),
           });
         } catch (err: any) {
           logger.warn(`notify: push failed for ${opts.userId}: ${err?.message}`);

@@ -26,7 +26,7 @@ cleanupOutdatedCaches();
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let payload: { title: string; body: string; icon?: string; link?: string; tag?: string; renotify?: boolean };
+  let payload: { title: string; body: string; icon?: string; link?: string; tag?: string; renotify?: boolean; image?: string };
   try {
     payload = event.data.json();
   } catch {
@@ -46,6 +46,8 @@ self.addEventListener('push', (event) => {
     // на прозрачном фоне. Непрозрачная иконка давала белый квадрат в шторке.
     badge: '/badge-96.png',
     data: { link: payload.link || '/' },
+    // Большая картинка (афиша концерта) — Android и ПК; iOS игнорирует.
+    ...(typeof payload.image === 'string' && payload.image ? { image: payload.image } : {}),
     ...(tag ? { tag, renotify: payload.renotify !== false } : {}),
   };
 

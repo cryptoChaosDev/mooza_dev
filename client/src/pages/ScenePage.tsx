@@ -3,7 +3,9 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   Ticket, MapPin, ChevronRight, Loader2, RefreshCw, Search, BadgeCheck, CalendarDays, Music2, Clock,
+  SlidersHorizontal, ArrowUpDown, X,
 } from 'lucide-react';
+import HorizontalScroller from '../components/HorizontalScroller';
 import AvatarComponent from '../components/Avatar';
 import BottomSheet from '../components/BottomSheet';
 import { referenceAPI } from '../lib/api';
@@ -15,8 +17,8 @@ import { plural } from '../lib/plural';
 import { artistHref } from '../lib/artistUtils';
 import { reachGoal } from '../lib/metrika';
 import {
-  sceneAPI, SCENE_PERIODS, SOURCE_LABEL, concertDayKey, concertTime, dayHeading, priceLabel,
-  type SceneCity, type SceneConcert, type ScenePeriod,
+  sceneAPI, SCENE_PERIODS, SCENE_PRICES, SCENE_SORTS, SCENE_TYPES, SOURCE_LABEL, concertDayKey, concertTime, dayHeading, priceLabel,
+  type SceneCity, type SceneConcert, type ScenePeriod, type SceneSort,
 } from '../lib/scene';
 
 const PERIOD_IDS = SCENE_PERIODS.map(([id]) => id);
@@ -39,6 +41,21 @@ export default function ScenePage() {
   const rawPeriod = sp.get('period') as ScenePeriod | null;
   const period: ScenePeriod = rawPeriod && PERIOD_IDS.includes(rawPeriod) ? rawPeriod : 'all';
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // Фильтры и сортировка — в адресе (ссылкой можно поделиться).
+  const fq = sp.get('q')?.trim() || '';
+  const fTypes = (sp.get('type') ?? '').split(',').filter((t) => (SCENE_TYPES as readonly string[]).includes(t));
+  const fPrice = Number(sp.get('price')) || 0;
+  const fMoooza = sp.get('moooza') === '1';
+  const rawSort = sp.get('sort') as SceneSort | null;
+  const sort: SceneSort = rawSort && SCENE_SORTS.some(([id]) => id === rawSort) ? rawSort : 'date';
+  const activeFilters = (fq ? 1 : 0) + (fTypes.length ? 1 : 0) + (fPrice ? 1 : 0) + (fMoooza ? 1 : 0);
+  const setParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(sp);
+    for (const [k, v] of Object.entries(patch)) { if (v) next.set(k, v); else next.delete(k); }
+    setSp(next, { replace: true });
+  };
 
   const citiesQ = useQuery({ queryKey: ['scene', 'cities'], queryFn: sceneAPI.cities, staleTime: 5 * 60_000 });
   const cities = citiesQ.data ?? [];
@@ -62,8 +79,12 @@ export default function ScenePage() {
   }, [citySlug]);
 
   const concertsQ = useInfiniteQuery({
-    queryKey: ['scene', 'concerts', citySlug ?? '', period],
-    queryFn: ({ pageParam }) => sceneAPI.concerts({ city: citySlug, period, page: pageParam, limit: 20 }),
+    queryKey: ['scene', 'concerts', citySlug ?? '', period, fq, fTypes.join(','), fPrice, fMoooza, sort],
+    queryFn: ({ pageParam }) => sceneAPI.concerts({
+      city: citySlug, period, page: pageParam, limit: 20,
+      q: fq || undefined, type: fTypes.join(',') || undefined, priceMax: fPrice || undefined,
+      moooza: fMoooza ? '1' : undefined, sort: sort !== 'date' ? sort : undefined,
+    }),
     initialPageParam: 1,
     getNextPageParam: (last) => (last.hasMore ? last.page + 1 : undefined),
     retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
@@ -79,7 +100,7 @@ export default function ScenePage() {
       ? `Концерты и живая музыка — ${cityName}: даты, площадки и билеты на Сцене Moooza.`
       : 'Сцена Moooza: концерты и живая музыка по городам России — кто играет сегодня, на выходных и в этом месяце.',
     canonical: citySlug ? `/scene/${citySlug}` : '/scene',
-    robots: period === 'all' ? ROBOTS_INDEX : ROBOTS_NOINDEX_FOLLOW,
+    robots: period === 'all' && !activeFilters && sort === 'date' ? ROBOTS_INDEX : ROBOTS_NOINDEX_FOLLOW,
   });
 
   const setPeriod = (p: ScenePeriod) => {
@@ -92,7 +113,9 @@ export default function ScenePage() {
     if (!slug) {
       try { localStorage.setItem(LAST_CITY_KEY, ALL_CITIES); } catch { /* приватный режим */ }
     }
-    navigate(`${slug ? `/scene/${slug}` : '/scene'}${period !== 'all' ? `?period=${period}` : ''}`, { state: slug ? null : { allCities: true } });
+    // Период, фильтры и сортировка сохраняются при смене города.
+    const qs = sp.toString();
+    navigate(`${slug ? `/scene/${slug}` : '/scene'}${qs ? `?${qs}` : ''}`, { state: slug ? null : { allCities: true } });
   };
 
   // Лента по дням (местное время города концерта).
@@ -106,7 +129,7 @@ export default function ScenePage() {
     return out;
   }, [items]);
 
-  const topCities = cities.slice(0, 8);
+  const topCities = cities.slice(0, 20);
   const currentInTop = !citySlug || topCities.some((c) => c.slug === citySlug);
 
   return (
@@ -123,8 +146,11 @@ export default function ScenePage() {
               <p className="text-[11px] text-slate-500 leading-tight truncate">Концерты и живая музыка по городам</p>
             </div>
           </div>
-          {/* Города */}
-          <div className="px-4 pb-2 flex gap-1.5 overflow-x-auto scrollbar-none">
+          {/* Города: лента листается свайпом, колесом, мышью и стрелками */}
+          <HorizontalScroller className="mx-4 mb-2">
+            <CityChip active={false} onClick={() => setPickerOpen(true)}>
+              <Search size={14} /> <span className="sr-only sm:not-sr-only">Найти город</span>
+            </CityChip>
             <CityChip active={!citySlug} onClick={() => goCity(null)}>Все города</CityChip>
             {!currentInTop && cityName && citySlug && (
               <CityChip active onClick={() => goCity(citySlug)}>{cityName}</CityChip>
@@ -136,24 +162,58 @@ export default function ScenePage() {
             ))}
             {cities.length > topCities.length && (
               <CityChip active={false} onClick={() => setPickerOpen(true)}>
-                <Search size={13} /> Другой город
+                Ещё {cities.length - topCities.length} {plural(cities.length - topCities.length, 'город', 'города', 'городов')}
               </CityChip>
             )}
-          </div>
-          {/* Периоды */}
-          <div className="px-4 pb-2.5 flex gap-1 overflow-x-auto scrollbar-none">
-            {SCENE_PERIODS.map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setPeriod(id)}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                  period === id ? 'bg-primary-500/15 text-primary-300 border border-primary-500/30' : 'text-slate-400 hover:text-white border border-transparent'
-                }`}
+          </HorizontalScroller>
+          {/* Периоды + фильтры и сортировка */}
+          <div className="px-4 pb-2.5 flex items-center gap-2">
+            <HorizontalScroller className="flex-1 min-w-0">
+              {SCENE_PERIODS.map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setPeriod(id)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+                    period === id ? 'bg-primary-500/15 text-primary-300 border border-primary-500/30' : 'text-slate-400 hover:text-white border border-transparent'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </HorizontalScroller>
+            <button
+              onClick={() => setFiltersOpen(true)}
+              className={`flex-shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-xl text-sm font-medium border transition-colors ${
+                activeFilters ? 'bg-primary-500/15 text-primary-300 border-primary-500/30' : 'bg-slate-900/60 text-slate-300 border-slate-800 hover:text-white'
+              }`}
+            >
+              <SlidersHorizontal size={15} />
+              <span className="hidden sm:inline">Фильтры</span>
+              {activeFilters > 0 && (
+                <span className="min-w-[18px] h-[18px] px-1 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{activeFilters}</span>
+              )}
+            </button>
+            <label className="relative flex-shrink-0 inline-flex items-center min-h-[36px] rounded-xl bg-slate-900/60 border border-slate-800 text-sm text-slate-300 hover:text-white">
+              <ArrowUpDown size={14} className="absolute left-2.5 pointer-events-none" />
+              <span className="sr-only">Сортировка</span>
+              <select
+                value={sort}
+                onChange={(e) => setParams({ sort: e.target.value === 'date' ? null : e.target.value })}
+                className="appearance-none bg-transparent pl-8 pr-3 py-1.5 rounded-xl text-sm focus:outline-none cursor-pointer max-w-[9.5rem] sm:max-w-none"
               >
-                {label}
-              </button>
-            ))}
+                {SCENE_SORTS.map(([id, label]) => <option key={id} value={id} className="bg-slate-900">{label}</option>)}
+              </select>
+            </label>
           </div>
+          {/* Активные фильтры — чипы с крестиком */}
+          {activeFilters > 0 && (
+            <HorizontalScroller className="mx-4 mb-2.5">
+              {fq && <FilterChip onClear={() => setParams({ q: null })}>«{fq}»</FilterChip>}
+              {fTypes.length > 0 && <FilterChip onClear={() => setParams({ type: null })}>{fTypes.join(', ')}</FilterChip>}
+              {fPrice > 0 && <FilterChip onClear={() => setParams({ price: null })}>{SCENE_PRICES.find(([v]) => v === fPrice)?.[1] ?? `до ${fPrice} ₽`}</FilterChip>}
+              {fMoooza && <FilterChip onClear={() => setParams({ moooza: null })}>Артисты Moooza</FilterChip>}
+            </HorizontalScroller>
+          )}
         </div>
 
         <div className="px-4 pt-4 space-y-4">
@@ -175,10 +235,12 @@ export default function ScenePage() {
             </div>
           ) : items.length === 0 ? (
             <EmptyState
-              title={period === 'all' ? 'Пока нет концертов' : 'В эти дни концертов нет'}
-              text={period === 'all'
-                ? 'Афиша обновляется каждую ночь. Артисты Moooza могут добавить свои концерты на странице артиста.'
-                : 'Посмотрите другие даты — например, «Скоро».'}
+              title={activeFilters ? 'Ничего не нашлось' : period === 'all' ? 'Пока нет концертов' : 'В эти дни концертов нет'}
+              text={activeFilters
+                ? 'Попробуйте ослабить фильтры или выбрать другие даты.'
+                : period === 'all'
+                  ? 'Афиша обновляется каждую ночь. Артисты Moooza могут добавить свои концерты на странице артиста.'
+                  : 'Посмотрите другие даты — например, «Скоро».'}
             />
           ) : (
             <>
@@ -218,6 +280,20 @@ export default function ScenePage() {
       <BottomSheet isOpen={pickerOpen} onClose={() => setPickerOpen(false)} title="Город" height="full">
         <CityList cities={cities} current={citySlug} onPick={goCity} />
       </BottomSheet>
+      <BottomSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title="Фильтры" height="auto">
+        <FiltersForm
+          initial={{ q: fq, types: fTypes, price: fPrice, moooza: fMoooza }}
+          onApply={(f) => {
+            setParams({
+              q: f.q.trim() || null,
+              type: f.types.length ? f.types.join(',') : null,
+              price: f.price ? String(f.price) : null,
+              moooza: f.moooza ? '1' : null,
+            });
+            setFiltersOpen(false);
+          }}
+        />
+      </BottomSheet>
     </div>
   );
 }
@@ -232,6 +308,78 @@ function CityChip({ active, onClick, children }: { active: boolean; onClick: () 
     >
       {children}
     </button>
+  );
+}
+
+function FilterChip({ onClear, children }: { onClear: () => void; children: React.ReactNode }) {
+  return (
+    <span className="flex-shrink-0 inline-flex items-center gap-1 min-h-[32px] pl-3 pr-1 rounded-xl bg-primary-500/10 border border-primary-500/25 text-xs text-primary-200">
+      {children}
+      <button onClick={onClear} aria-label="Убрать фильтр" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-primary-500/20">
+        <X size={13} />
+      </button>
+    </span>
+  );
+}
+
+interface FiltersValue { q: string; types: string[]; price: number; moooza: boolean }
+
+function FiltersForm({ initial, onApply }: { initial: FiltersValue; onApply: (f: FiltersValue) => void }) {
+  const [f, setF] = useState<FiltersValue>(initial);
+  const pill = (active: boolean) =>
+    `min-h-[40px] px-3.5 rounded-xl text-sm font-medium border transition-colors ${
+      active ? 'bg-primary-500/15 text-primary-300 border-primary-500/40' : 'bg-slate-800/60 text-slate-300 border-slate-700/50 hover:text-white'
+    }`;
+  return (
+    <form className="p-4 space-y-4" onSubmit={(e) => { e.preventDefault(); onApply(f); }}>
+      <div>
+        <label className="block text-xs text-slate-500 mb-1.5">Поиск</label>
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            value={f.q}
+            onChange={(e) => setF({ ...f, q: e.target.value })}
+            maxLength={100}
+            placeholder="Артист, событие или площадка"
+            className="w-full pl-9 pr-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+      </div>
+      <div>
+        <p className="text-xs text-slate-500 mb-1.5">Что</p>
+        <div className="flex flex-wrap gap-2">
+          {SCENE_TYPES.map((t) => {
+            const on = f.types.includes(t);
+            return (
+              <button key={t} type="button" onClick={() => setF({ ...f, types: on ? f.types.filter((x) => x !== t) : [...f.types, t] })} className={pill(on)}>
+                {t}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <p className="text-xs text-slate-500 mb-1.5">Цена билета</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setF({ ...f, price: 0 })} className={pill(!f.price)}>Любая</button>
+          {SCENE_PRICES.map(([v, label]) => (
+            <button key={v} type="button" onClick={() => setF({ ...f, price: v })} className={pill(f.price === v)}>{label}</button>
+          ))}
+        </div>
+      </div>
+      <label className="flex items-center justify-between gap-3 min-h-[44px] px-3 rounded-xl bg-slate-800/40 border border-slate-700/50 cursor-pointer">
+        <span className="text-sm text-slate-200">Только артисты Moooza</span>
+        <input type="checkbox" checked={f.moooza} onChange={(e) => setF({ ...f, moooza: e.target.checked })} className="w-5 h-5 accent-primary-500" />
+      </label>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onApply({ q: '', types: [], price: 0, moooza: false })} className="flex-1 min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold">
+          Сбросить
+        </button>
+        <button type="submit" className="flex-[2] min-h-[48px] rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold">
+          Показать
+        </button>
+      </div>
+    </form>
   );
 }
 

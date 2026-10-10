@@ -1562,6 +1562,9 @@ model Notification {
   title   String
   body    String
   link    String? // route to navigate on click
+  // Картинка уведомления без отправителя (афиша концерта «Сцены» и т.п.): в колокольчике
+  // вместо аватара, в push — большая картинка (Android/ПК).
+  imageUrl String?
   read    Boolean @default(false)
 
   createdAt DateTime @default(now())

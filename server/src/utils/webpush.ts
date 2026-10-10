@@ -25,6 +25,8 @@ export interface PushPayload {
   // один баннер), renotify — заново звенит/вибрирует при замене.
   tag?: string;
   renotify?: boolean;
+  /** Большая картинка уведомления (Android / ПК; iOS не показывает). */
+  image?: string;
 }
 
 // ── Delivery stats (in-memory; resets on restart) ────────────────────────────

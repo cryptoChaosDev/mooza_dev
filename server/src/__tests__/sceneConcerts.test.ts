@@ -164,7 +164,7 @@ describe('saveQticketsCity', () => {
 describe('notifyNewConcerts', () => {
   const concert = (id: string) => ({
     id, artistId: 'a1', startsAt: new Date('2026-11-13T16:00:00Z'), hasTime: true,
-    cityName: 'Самара', cityKey: 'самара', venue: 'Клуб', artist: { name: 'Kursha' },
+    cityName: 'Самара', cityKey: 'самара', venue: 'Клуб', imageUrl: 'https://cdn.qtickets.tech/t.jpg', artist: { name: 'Kursha', avatar: null },
   });
 
   it('push подписчикам из города артиста — один раз на концерт', async () => {
@@ -177,6 +177,7 @@ describe('notifyNewConcerts', () => {
     });
     expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
       userId: 'u1', type: 'scene_concert', title: 'Kursha: концерт в Самара', link: '/concerts/c1',
+      imageUrl: 'https://cdn.qtickets.tech/t.jpg',
     }));
   });
 
@@ -326,6 +327,42 @@ describe('концерты Яндекс Афиши — как у Qtickets', () =
       listen: { vk_music: 'https://vk.com/music/artist/kursha', yandex_music: 'https://music.yandex.ru/artist/6038846' },
     });
     expect(d?.concert.posterUrl).toBe('/uploads/b.png');
+  });
+});
+
+describe('фильтры и сортировка «Сцены»', () => {
+  const whereOf = () => mockPrisma.concert.findMany.mock.calls[0][0];
+
+  it('поиск, типы, цена «до», только артисты Moooza, сортировка по цене', async () => {
+    const res = await request(app).get('/api/scene/concerts')
+      .query({ q: 'kursha', type: 'Концерт,Рейв,Опера', priceMax: '1000', moooza: '1', sort: 'price_asc' });
+    expect(res.status).toBe(200);
+    expect(res.body.sort).toBe('price_asc');
+    const args = whereOf();
+    const and = args.where.AND;
+    expect(and).toEqual(expect.arrayContaining([
+      { OR: [
+        { title: { contains: 'kursha', mode: 'insensitive' } },
+        { venue: { contains: 'kursha', mode: 'insensitive' } },
+        { artist: { name: { contains: 'kursha', mode: 'insensitive' } } },
+      ] },
+      { type: { in: ['Концерт', 'Рейв'] } }, // «Опера» — не тип «Сцены»
+      { priceFrom: { not: null, lte: 1000 } },
+      { artistId: { not: null } },
+    ]));
+    expect(args.orderBy[0]).toEqual({ priceFrom: { sort: 'asc', nulls: 'last' } });
+  });
+
+  it('без фильтров — только видимость и период; неизвестная сортировка — по дате', async () => {
+    await request(app).get('/api/scene/concerts').query({ sort: 'random', priceMax: 'abc' });
+    const args = whereOf();
+    expect(args.where.AND).toHaveLength(2);
+    expect(args.orderBy).toEqual([{ startsAt: 'asc' }, { id: 'asc' }]);
+  });
+
+  it('«новые в афише» — по дате добавления', async () => {
+    await request(app).get('/api/scene/concerts').query({ sort: 'new' });
+    expect(whereOf().orderBy[0]).toEqual({ createdAt: 'desc' });
   });
 });
 

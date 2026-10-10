@@ -2,6 +2,26 @@
 import { api } from './api';
 
 export type ScenePeriod = 'today' | 'weekend' | 'week' | 'month' | 'all';
+export type SceneSort = 'date' | 'price_asc' | 'price_desc' | 'new';
+
+/** Фильтры ленты (в адресе: q, type, price, moooza, sort). */
+export interface SceneFilterParams {
+  q?: string;
+  /** Через запятую: «Концерт,Фестиваль». */
+  type?: string;
+  priceMax?: number;
+  moooza?: '1';
+  sort?: SceneSort;
+}
+
+export const SCENE_TYPES = ['Концерт', 'Фестиваль', 'Рейв', 'Вечеринка'] as const;
+export const SCENE_PRICES: Array<[number, string]> = [[1000, 'до 1 000 ₽'], [2000, 'до 2 000 ₽'], [3000, 'до 3 000 ₽'], [5000, 'до 5 000 ₽']];
+export const SCENE_SORTS: Array<[SceneSort, string]> = [
+  ['date', 'По дате'],
+  ['price_asc', 'Сначала дешёвые'],
+  ['price_desc', 'Сначала дорогие'],
+  ['new', 'Новые в афише'],
+];
 export type ConcertSource = 'YANDEX_MUSIC' | 'MANUAL' | 'QTICKETS';
 
 export interface SceneCity { slug: string; name: string; upcoming: number }
@@ -73,7 +93,7 @@ export interface NewConcertPayload {
 
 export const sceneAPI = {
   cities: () => api.get<{ cities: SceneCity[] }>('/scene/cities').then((r) => r.data.cities),
-  concerts: (params: { city?: string; period?: ScenePeriod; page?: number; limit?: number }) =>
+  concerts: (params: { city?: string; period?: ScenePeriod; page?: number; limit?: number } & SceneFilterParams) =>
     api.get<SceneConcertPage>('/scene/concerts', { params }).then((r) => r.data),
   concert: (id: string) => api.get<SceneConcertPageData>(`/scene/concerts/${id}`).then((r) => r.data),
   artistConcerts: (artistId: string) =>
