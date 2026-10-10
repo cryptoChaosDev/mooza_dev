@@ -94,7 +94,7 @@ export async function renderConcert(id: string): Promise<RenderOutcome> {
     indexable: future,
     robots: c.artist?.verified ? undefined : ROBOTS_NOINDEX_FOLLOW,
     ogType: 'event',
-    image: c.posterUrl ?? c.imageUrl,
+    image: (() => { const img = c.posterUrl ?? c.imageUrl; return img && img.startsWith('/') ? siteUrl(img) : img; })(),
     jsonLd: [concertDetailLd(c, url)],
     crumbs: [{ name: SITE_NAME, url: '/' }, { name: 'Сцена', url: '/scene' }, { name: c.cityName, url: `/scene/${c.citySlug}` }, { name: c.title }],
     bodyHtml:
@@ -110,6 +110,7 @@ export async function renderConcert(id: string): Promise<RenderOutcome> {
       ])
       + (c.artist ? linkList('Артист на Moooza', [{ href: artistPathOf(c.artist), text: c.artist.name }]) : '')
       + (c.description ? para(c.description) : '')
+      + (c.artistAbout?.description ? h2(`Об артисте — ${c.artist?.name ?? ''}`) + para(c.artistAbout.description) : '')
       + (c.ticketUrl ? linkList(null, [{ href: c.ticketUrl, text: 'Купить билет' }], { external: true }) : '')
       + (data.sameDay.length ? h2(`В этот день — ${c.cityName}`) + concertsHtml(data.sameDay, false) : ''),
   });

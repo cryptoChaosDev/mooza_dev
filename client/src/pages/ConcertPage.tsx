@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -6,12 +6,15 @@ import {
 } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
+import { ArtistListenBlock } from '../components/artist/ArtistListen';
+import { collectArtistLinks } from '../components/artist/linkPlatforms';
+import { plural } from '../lib/plural';
 import { useSeo, seoTitle, ROBOTS_INDEX, ROBOTS_NOINDEX, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 import { artistHref } from '../lib/artistUtils';
 import { reachGoal } from '../lib/metrika';
 import {
   sceneAPI, SOURCE_LABEL, concertDate, concertTime, downloadConcertIcs, mapsSearchUrl, priceLabel,
-  type SceneConcert,
+  type SceneConcert, type SceneConcertDetail,
 } from '../lib/scene';
 
 /**
@@ -165,8 +168,9 @@ export default function ConcertPage() {
             )}
           </div>
 
-          {/* Артист Moooza */}
-          {c.artist && (
+          {/* Артист Moooza: подробно — описание, жанры, слушатели, «Слушать» */}
+          {c.artist && c.artistAbout && <ArtistAbout c={c} />}
+          {c.artist && !c.artistAbout && (
             <Link
               to={artistHref(c.artist)}
               className="flex items-center gap-3 p-3 rounded-2xl bg-slate-900/60 border border-slate-800/60 hover:border-slate-700 transition-colors"
@@ -203,6 +207,61 @@ export default function ConcertPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ArtistAbout({ c }: { c: SceneConcertDetail }) {
+  const a = c.artist!;
+  const about = c.artistAbout!;
+  const [open, setOpen] = useState(false);
+  const listen = useMemo(() => collectArtistLinks(about.listen).listen, [about.listen]);
+  const long = !!about.description && (about.description.length > 300 || about.description.split('\n').length > 5);
+  return (
+    <section className="rounded-2xl bg-slate-900/60 border border-slate-800/60 overflow-hidden">
+      <h2 className="px-4 pt-3.5 text-sm font-semibold text-slate-300">Об артисте</h2>
+      <Link to={artistHref(a)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
+        <AvatarComponent src={a.avatar} name={a.name} size={52} />
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-semibold text-white truncate flex items-center gap-1">
+            {a.name} {a.verified && <BadgeCheck size={16} className="text-sky-400 flex-shrink-0" />}
+          </p>
+          {about.listeners != null && (
+            <p className="text-xs text-slate-400">
+              {about.listeners.toLocaleString('ru-RU')} {plural(about.listeners, 'слушатель', 'слушателя', 'слушателей')} в месяц
+            </p>
+          )}
+          {about.genres.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {about.genres.map((g) => <span key={g} className="px-1.5 py-0.5 rounded-md bg-slate-800 text-[11px] text-slate-300">{g}</span>)}
+            </div>
+          )}
+        </div>
+        <ChevronRight size={18} className="text-slate-500 flex-shrink-0" />
+      </Link>
+      {about.description && (
+        <div className="px-4 pb-1">
+          <p className={`text-sm text-slate-300 leading-relaxed whitespace-pre-line ${!open && long ? 'line-clamp-5' : ''}`}>{about.description}</p>
+          {long && (
+            <button onClick={() => setOpen((v) => !v)} className="min-h-[36px] text-sm font-medium text-primary-300 hover:text-white">
+              {open ? 'Свернуть' : 'Читать дальше'}
+            </button>
+          )}
+        </div>
+      )}
+      {listen.length > 0 && (
+        <div className="px-4 pt-2">
+          <ArtistListenBlock artistId={a.id} links={listen} canEdit={false} onEditLinks={() => {}} />
+        </div>
+      )}
+      <div className="px-4 pb-4 pt-1">
+        <Link
+          to={artistHref(a)}
+          className="w-full min-h-[44px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors"
+        >
+          Открыть визитку · релизы и все концерты
+        </Link>
+      </div>
+    </section>
   );
 }
 

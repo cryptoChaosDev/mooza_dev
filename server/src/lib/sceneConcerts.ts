@@ -289,7 +289,29 @@ export async function listSitemapScene(now = new Date()): Promise<{ path: string
 const CONCERT_DETAIL_SELECT = {
   ...CONCERT_SELECT,
   description: true, endsAt: true, ageLimit: true, organizer: true, posterUrl: true, detailsFetchedAt: true,
+  artist: {
+    select: {
+      id: true, slug: true, name: true, avatar: true, status: true,
+      description: true, banner: true, listeners: true, socialLinks: true, ymId: true,
+      genres: { select: { genre: { select: { name: true } } } },
+    },
+  },
 } satisfies Prisma.ConcertSelect;
+
+/**
+ * Площадки «Слушать» на странице концерта — только музыкальные сервисы:
+ * контакты (телефон, email, мессенджеры) гостям не отдаём (маскирование контактов).
+ */
+const LISTEN_KEYS = ['yandex_music', 'vk_music', 'zvuk', 'mts_music', 'apple_music', 'spotify', 'soundcloud', 'deezer', 'bandcamp'];
+
+export interface ConcertArtistAbout {
+  description: string | null;
+  banner: string | null;
+  listeners: number | null;
+  genres: string[];
+  /** Ключ площадки → ссылка или ник (клиент собирает ссылку как на визитке). */
+  listen: Record<string, string>;
+}
 
 export interface ConcertDetailDTO extends ConcertDTO {
   description: string | null;
@@ -300,6 +322,8 @@ export interface ConcertDetailDTO extends ConcertDTO {
   posterUrl: string | null;
   /** Показывается на «Сцене» (афиша или проверенный артист). */
   onScene: boolean;
+  /** Об артисте Moooza — у концертов без собственного описания (ЯМ, добавленные вручную) это главное наполнение. */
+  artistAbout: ConcertArtistAbout | null;
 }
 
 /** Подробности события Qtickets — повторно не чаще раза в неделю (цена, описание меняются). */
@@ -356,14 +380,33 @@ export async function enrichQticketsDetails(opts: { limit?: number; delayMs?: nu
 }
 
 function serializeConcertDetail(c: Prisma.ConcertGetPayload<{ select: typeof CONCERT_DETAIL_SELECT }>): ConcertDetailDTO {
+  const a = c.artist;
+  let artistAbout: ConcertArtistAbout | null = null;
+  if (a) {
+    const links = (a.socialLinks && typeof a.socialLinks === 'object' ? a.socialLinks : {}) as Record<string, unknown>;
+    const listen: Record<string, string> = {};
+    for (const k of LISTEN_KEYS) {
+      if (typeof links[k] === 'string' && links[k]) listen[k] = String(links[k]).slice(0, 500);
+    }
+    if (!listen.yandex_music && a.ymId) listen.yandex_music = `https://music.yandex.ru/artist/${a.ymId}`;
+    artistAbout = {
+      description: a.description ? a.description.slice(0, 1500) : null,
+      banner: a.banner ?? null,
+      listeners: a.listeners != null && Number(a.listeners) > 0 ? Number(a.listeners) : null,
+      genres: a.genres.map((g) => g.genre.name.split(/\s*[,/]\s*/)[0]).filter(Boolean).slice(0, 5),
+      listen,
+    };
+  }
   return {
     ...serializeConcert(c),
     description: c.description,
     endsAt: c.endsAt ? localIso(c.endsAt, c.utcOffsetMin) : null,
     ageLimit: c.ageLimit,
     organizer: c.organizer,
-    posterUrl: c.posterUrl ?? c.imageUrl,
-    onScene: !c.artist || VISIBLE_ARTIST_STATUSES.includes(c.artist.status),
+    // Своей афиши нет (добавлен вручную) — обложка или аватар артиста.
+    posterUrl: c.posterUrl ?? c.imageUrl ?? a?.banner ?? a?.avatar ?? null,
+    onScene: !a || VISIBLE_ARTIST_STATUSES.includes(a.status),
+    artistAbout,
   };
 }
 
@@ -408,6 +451,17 @@ export async function getConcertDetail(id: string, now = new Date()): Promise<{
 
 // ─── Яндекс Музыка ───────────────────────────────────────────────────────────
 
+/**
+ * Картинка Яндекс Афиши: …/orig весит ~1 МБ — берём готовые размеры CDN
+ * (s380x220 — миниатюра для списков, s760x440 — афиша на странице концерта).
+ */
+export function yandexAfishaImages(url: unknown): { imageUrl: string | null; posterUrl: string | null } {
+  if (typeof url !== 'string' || !/^https:\/\/avatars\.mds\.yandex\.net\//.test(url)) return { imageUrl: null, posterUrl: null };
+  const m = /^(https:\/\/avatars\.mds\.yandex\.net\/get-afishanew\/\d+\/[0-9a-f]+)\/[a-z0-9_]+$/i.exec(url);
+  if (!m) return { imageUrl: url, posterUrl: url };
+  return { imageUrl: `${m[1]}/s380x220`, posterUrl: `${m[1]}/s760x440` };
+}
+
 /** Начало концерта из витрины ЯМ: datetime с поясом или только дата (полдень МСК). */
 export function ymConcertStart(c: any): { startsAt: Date; hasTime: boolean; utcOffsetMin: number | null } | null {
   if (typeof c?.datetime === 'string') {
@@ -439,6 +493,7 @@ export async function syncYmConcerts(artist: { id: string; name: string }, conce
     if (keep.includes(externalId)) continue;
     keep.push(externalId);
     const link = httpLink(c?.afishaUrl) ?? httpLink(c?.url);
+    const images = yandexAfishaImages(c?.imageUrl);
     const data = {
       artistId: artist.id,
       title: str(c?.concertTitle) ?? str(c?.title) ?? artist.name,
@@ -452,6 +507,10 @@ export async function syncYmConcerts(artist: { id: string; name: string }, conce
       address: str(c?.address),
       url: link,
       ticketUrl: link,
+      imageUrl: images.imageUrl,
+      posterUrl: images.posterUrl,
+      ageLimit: str(c?.contentRating, 10),
+      priceFrom: typeof c?.minPrice === 'number' && c.minPrice > 0 ? Math.round(c.minPrice) : null,
     };
     const existing = await prisma.concert.findUnique({
       where: { source_externalId: { source: 'YANDEX_MUSIC', externalId } },

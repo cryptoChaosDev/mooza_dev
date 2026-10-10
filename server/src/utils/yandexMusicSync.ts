@@ -161,6 +161,11 @@ function buildYmData(brief: any): Record<string, unknown> {
         address: str(c?.address),
         afishaUrl: link(c?.afishaUrl),
         url: link(c?.url),
+        // Афиша мероприятия (CDN Яндекса), возраст и минимальная цена — для страницы концерта.
+        imageUrl: typeof c?.imageUrl === 'string' && /^https:\/\/avatars\.mds\.yandex\.net\//.test(c.imageUrl)
+          ? c.imageUrl.slice(0, 500) : undefined,
+        contentRating: typeof c?.contentRating === 'string' ? c.contentRating.slice(0, 10) : undefined,
+        minPrice: typeof c?.minPrice?.value === 'number' && c.minPrice.value > 0 ? Math.round(c.minPrice.value) : undefined,
       };
     }),
     bestPlaylist: brief.playlists?.[0]

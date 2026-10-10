@@ -37,6 +37,7 @@ jest.mock('../middleware/rateLimiter', () => ({ guestReadLimiter: (_req: any, _r
 import {
   periodRange, dedupeConcerts, matchArtist, normName, verifiedArtistNameIndex, syncYmConcerts,
   saveQticketsCity, notifyNewConcerts, citySlug, ymConcertStart, formatConcertLocal, localIso, getConcertDetail,
+  yandexAfishaImages,
 } from '../lib/sceneConcerts';
 import { isoOffsetMinutes } from '../lib/qtickets';
 import sceneRoutes from '../routes/scene';
@@ -116,14 +117,19 @@ describe('syncYmConcerts', () => {
   it('создаёт новые, обновляет известные, удаляет пропавшие будущие', async () => {
     mockPrisma.concert.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'old' });
     const n = await syncYmConcerts({ id: 'a1', name: 'Kursha' }, [
-      { datetime: '2026-11-13T19:00:00+04:00', city: 'Самара', place: 'Клуб', afishaUrl: 'https://afisha.yandex.ru/x' },
+      {
+        datetime: '2026-11-13T19:00:00+04:00', city: 'Самара', place: 'Клуб', afishaUrl: 'https://afisha.yandex.ru/x',
+        imageUrl: 'https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/orig', contentRating: '16+', minPrice: 1200,
+      },
       { date: '2026-12-01', city: 'Орёл', title: 'Тур' },
       { city: 'Без даты' },
     ], new Date('2026-10-10T00:00:00Z'));
     expect(n).toBe(1);
     expect(mockPrisma.concert.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       source: 'YANDEX_MUSIC', artistId: 'a1', title: 'Kursha', cityName: 'Самара', cityKey: 'самара', venue: 'Клуб',
-      ticketUrl: 'https://afisha.yandex.ru/x', hasTime: true,
+      ticketUrl: 'https://afisha.yandex.ru/x', hasTime: true, ageLimit: '16+', priceFrom: 1200,
+      imageUrl: 'https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/s380x220',
+      posterUrl: 'https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/s760x440',
     }) });
     expect(mockPrisma.concert.update).toHaveBeenCalledWith({ where: { id: 'old' }, data: expect.objectContaining({ title: 'Тур', hasTime: false }) });
     const del = mockPrisma.concert.deleteMany.mock.calls[0][0].where;
@@ -289,3 +295,37 @@ describe('страница концерта', () => {
     expect(res.body).toEqual(expect.objectContaining({ moreByArtist: [], sameDay: [] }));
   });
 });
+
+describe('концерты Яндекс Афиши — как у Qtickets', () => {
+  it('картинки: миниатюра и афиша нужного размера, чужие адреса не берём', () => {
+    expect(yandexAfishaImages('https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/orig')).toEqual({
+      imageUrl: 'https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/s380x220',
+      posterUrl: 'https://avatars.mds.yandex.net/get-afishanew/4487581/46c33cbc/s760x440',
+    });
+    expect(yandexAfishaImages('https://evil.example/x.jpg')).toEqual({ imageUrl: null, posterUrl: null });
+    expect(yandexAfishaImages(undefined)).toEqual({ imageUrl: null, posterUrl: null });
+  });
+
+  it('«Об артисте»: описание, жанры, слушатели, только музыкальные площадки; обложка вместо афиши', async () => {
+    const ID = '11111111-2222-3333-4444-555555555555';
+    mockPrisma.concert.findUnique.mockResolvedValue({
+      id: ID, source: 'YANDEX_MUSIC', title: 'Kursha', type: 'Концерт', startsAt: new Date(Date.now() + 5 * 864e5),
+      hasTime: true, utcOffsetMin: 180, cityName: 'Москва', cityKey: 'москва', venue: 'Клуб', address: null,
+      url: null, ticketUrl: null, imageUrl: null, posterUrl: null, priceFrom: null, artistId: 'a1',
+      description: null, endsAt: null, ageLimit: null, organizer: null, detailsFetchedAt: null,
+      artist: {
+        id: 'a1', slug: 'kursha', name: 'Kursha', avatar: '/uploads/a.png', status: 'VERIFIED',
+        description: 'Группа из Самары', banner: '/uploads/b.png', listeners: BigInt(2316), ymId: '6038846',
+        socialLinks: { vk_music: 'https://vk.com/music/artist/kursha', phone: '+79990000000', telegram: '@kursha' },
+        genres: [{ genre: { name: 'Метал, Metal' } }, { genre: { name: 'Рок' } }],
+      },
+    });
+    const d = await getConcertDetail(ID);
+    expect(d?.concert.artistAbout).toEqual({
+      description: 'Группа из Самары', banner: '/uploads/b.png', listeners: 2316, genres: ['Метал', 'Рок'],
+      listen: { vk_music: 'https://vk.com/music/artist/kursha', yandex_music: 'https://music.yandex.ru/artist/6038846' },
+    });
+    expect(d?.concert.posterUrl).toBe('/uploads/b.png');
+  });
+});
+

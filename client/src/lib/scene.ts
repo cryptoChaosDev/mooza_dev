@@ -36,6 +36,14 @@ export interface SceneConcertDetail extends SceneConcert {
   posterUrl: string | null;
   /** Показывается на «Сцене» (афиша или проверенный артист). */
   onScene: boolean;
+  /** Об артисте Moooza (описание, жанры, слушатели, площадки «Слушать»). */
+  artistAbout: {
+    description: string | null;
+    banner: string | null;
+    listeners: number | null;
+    genres: string[];
+    listen: Record<string, string>;
+  } | null;
 }
 
 export interface SceneConcertPageData {
