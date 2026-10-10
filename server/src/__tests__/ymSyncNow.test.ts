@@ -33,6 +33,7 @@ const artistRow = {
 };
 const mockPrisma = {
   artist: {
+    findMany: jest.fn(async () => [{ id: 'a1' }, { id: 'a2' }]),
     findUnique: jest.fn(async () => ({ ...artistRow })),
     updateMany: jest.fn(async () => ({ count: 1 })),
   },
@@ -49,7 +50,7 @@ jest.mock('../utils/telegram', () => ({ tgLog: jest.fn() }));
 const mockWarn = jest.fn();
 jest.mock('../utils/logger', () => ({ __esModule: true, default: { info: jest.fn(), warn: (...a: unknown[]) => mockWarn(...a), error: jest.fn() } }));
 
-import { syncArtistFromYandexMusic, syncArtistNow } from '../utils/yandexMusicSync';
+import { syncArtistFromYandexMusic, syncArtistNow, syncUnverifiedArtistsNow } from '../utils/yandexMusicSync';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -112,6 +113,16 @@ describe('syncArtistNow', () => {
     expect(mockPrisma.artist.updateMany).toHaveBeenCalledTimes(1);
     // После завершения — снова можно.
     await syncArtistNow('a1', 'verified');
+    expect(mockPrisma.artist.updateMany).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncUnverifiedArtistsNow — разово все непроверенные карточки со ссылкой', async () => {
+    const n = await syncUnverifiedArtistsNow(0);
+    expect(n).toBe(2);
+    expect(mockPrisma.artist.findMany).toHaveBeenCalledWith({
+      where: { status: { notIn: ['VERIFIED', 'APPROVED'] }, ymId: { not: null } },
+      select: { id: true },
+    });
     expect(mockPrisma.artist.updateMany).toHaveBeenCalledTimes(2);
   });
 

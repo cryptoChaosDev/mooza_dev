@@ -58,12 +58,16 @@ function kickUserSockets(userId: string, reason = 'revoked') {
 }
 
 // Ручной прогон синка Яндекс.Музыки (тот же код, что ночной джоб) — для проверки.
-router.post('/ym-sync', async (_req, res) => {
+// { includeUnverified: true } — следом разово и непроверенные карточки со ссылкой.
+router.post('/ym-sync', async (req, res) => {
   try {
-    const { runYandexMusicSync } = await import('../utils/yandexMusicSync');
+    const { runYandexMusicSync, syncUnverifiedArtistsNow } = await import('../utils/yandexMusicSync');
+    const includeUnverified = req.body?.includeUnverified === true;
     // Фоном — обход с паузами может занять минуты; ответ сразу.
-    runYandexMusicSync().catch(() => {});
-    res.json({ started: true });
+    runYandexMusicSync()
+      .then(() => (includeUnverified ? syncUnverifiedArtistsNow() : 0))
+      .catch(() => {});
+    res.json({ started: true, includeUnverified });
   } catch (e: any) {
     return adminError(res, 'POST /ym-sync', e, 500);
   }

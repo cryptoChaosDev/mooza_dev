@@ -531,6 +531,23 @@ export async function syncArtistNow(artistId: string, reason: 'created' | 'linke
   }
 }
 
+/**
+ * Разовый синк всех НЕпроверенных карточек со ссылкой на ЯМ — по одной, с паузой
+ * (ручной запуск из админки: POST /admin/ym-sync { includeUnverified: true }).
+ * Ночной обход их не трогает. Возвращает число карточек.
+ */
+export async function syncUnverifiedArtistsNow(pauseMs = 3000): Promise<number> {
+  const rows = await prisma.artist.findMany({
+    where: { status: { notIn: ['VERIFIED', 'APPROVED'] }, ymId: { not: null } },
+    select: { id: true },
+  });
+  for (const [i, r] of rows.entries()) {
+    if (i > 0 && pauseMs > 0) await new Promise((res) => setTimeout(res, pauseMs));
+    await syncArtistNow(r.id, 'linked');
+  }
+  return rows.length;
+}
+
 // Защита от параллельных прогонов (ночной джоб + ручной POST /admin/ym-sync +
 // несколько инстансов API): флаг в процессе + advisory-lock Postgres на время
 // всего обхода. Лок транзакционный (pg_try_advisory_xact_lock) внутри
