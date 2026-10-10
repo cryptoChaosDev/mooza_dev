@@ -13,7 +13,7 @@ import { useSeo, seoTitle, ROBOTS_INDEX, ROBOTS_NOINDEX, ROBOTS_NOINDEX_FOLLOW }
 import { artistHref } from '../lib/artistUtils';
 import { reachGoal } from '../lib/metrika';
 import {
-  sceneAPI, SOURCE_LABEL, concertDate, concertTime, downloadConcertIcs, mapsSearchUrl, priceLabel,
+  sceneAPI, SOURCE_LABEL, addressWithCity, concertDate, concertTime, downloadConcertIcs, mapsSearchUrl, priceLabel,
   type SceneConcert, type SceneConcertDetail,
 } from '../lib/scene';
 
@@ -136,7 +136,7 @@ export default function ConcertPage() {
               <MapPin size={18} className="text-emerald-400 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-[15px] font-semibold text-white">{c.venue ?? c.cityName}</p>
-                <p className="text-xs text-slate-400">{c.address ?? c.cityName}</p>
+                <p className="text-xs text-slate-400">{addressWithCity(c) ?? c.cityName}</p>
               </div>
               <a
                 href={mapsSearchUrl(c)}

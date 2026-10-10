@@ -175,9 +175,15 @@ export function downloadConcertIcs(c: SceneConcertDetail): void {
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 
+/** Адрес с городом: у Яндекс Афиши город в адресе не пишут («Транспортный пер., 10л»). */
+export function addressWithCity(c: Pick<SceneConcert, 'address' | 'cityName'>): string | null {
+  if (!c.address) return null;
+  return c.address.toLowerCase().includes(c.cityName.toLowerCase()) ? c.address : `${c.address}, ${c.cityName}`;
+}
+
 /** Поиск площадки на Яндекс Картах (без API и ключей). */
 export function mapsSearchUrl(c: Pick<SceneConcert, 'venue' | 'address' | 'cityName'>): string {
-  const q = [c.address ?? c.venue, c.address ? null : c.cityName].filter(Boolean).join(', ');
+  const q = addressWithCity(c) ?? [c.venue, c.cityName].filter(Boolean).join(', ');
   return `https://yandex.ru/maps/?text=${encodeURIComponent(q)}`;
 }
 
