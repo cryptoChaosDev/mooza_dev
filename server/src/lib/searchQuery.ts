@@ -58,11 +58,17 @@ export function searchTokens(q: string | null | undefined): string[] {
   return (long.length ? long : words).slice(0, 5);
 }
 
-/** Варианты одного слова: как набрано, другая раскладка, транслит в обе стороны. */
+/**
+ * Варианты одного слова: как набрано, другая раскладка и транслит каждого из них
+ * («rbyj» → «кино» → «kino»).
+ */
 export function tokenVariants(token: string): string[] {
   const t = normSearch(token);
-  const variants = [t, normSearch(swapLayout(t))];
-  if (/[а-я]/.test(t)) variants.push(normSearch(ruToLat(t)));
-  if (/[a-z]/.test(t)) variants.push(normSearch(latToRu(t)));
+  const variants: string[] = [];
+  for (const v of [t, normSearch(swapLayout(t))]) {
+    variants.push(v);
+    if (/[а-я]/.test(v)) variants.push(normSearch(ruToLat(v)));
+    if (/[a-z]/.test(v)) variants.push(normSearch(latToRu(v)));
+  }
   return [...new Set(variants.filter((v) => v.length >= Math.min(2, t.length)))];
 }

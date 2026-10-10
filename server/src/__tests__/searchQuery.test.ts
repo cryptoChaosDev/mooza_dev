@@ -22,6 +22,7 @@ describe('searchQuery', () => {
   it('варианты слова: как набрано, раскладка, транслит; однобуквенные — только если слово одно', () => {
     expect(tokenVariants('Kursha')).toEqual(expect.arrayContaining(['kursha', 'курша']));
     expect(tokenVariants('rehif')).toEqual(expect.arrayContaining(['rehif', 'курша']));
+    expect(tokenVariants('rbyj')).toEqual(expect.arrayContaining(['кино', 'kino'])); // раскладка + транслит
     expect(tokenVariants('Курша')).toEqual(expect.arrayContaining(['курша', 'kursha']));
     expect(searchTokens('Б 2')).toEqual(['б', '2']);
     expect(searchTokens('в клубе')).toEqual(['клубе']);
