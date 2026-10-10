@@ -17,7 +17,8 @@ import { plural } from '../lib/plural';
 import { artistHref } from '../lib/artistUtils';
 import { reachGoal } from '../lib/metrika';
 import {
-  sceneAPI, SCENE_PERIODS, SCENE_PRICES, SCENE_SORTS, SCENE_TYPES, SOURCE_LABEL, concertDayKey, concertTime, dayHeading, priceLabel,
+  sceneAPI, SCENE_PERIODS, SCENE_PRICES, SCENE_SORTS, SCENE_TYPES, SOURCE_LABEL, concertDate, concertDayKey, concertTime,
+  dayHeading, priceLabel,
   type SceneCity, type SceneConcert, type ScenePeriod, type SceneSort,
 } from '../lib/scene';
 
@@ -166,21 +167,22 @@ export default function ScenePage() {
               </CityChip>
             )}
           </HorizontalScroller>
-          {/* Периоды + фильтры и сортировка */}
+          {/* Периоды — своим рядом (на телефоне не сжимаются кнопками) */}
+          <HorizontalScroller className="mx-4 mb-2">
+            {SCENE_PERIODS.map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPeriod(id)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+                  period === id ? 'bg-primary-500/15 text-primary-300 border border-primary-500/30' : 'text-slate-400 hover:text-white border border-transparent'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </HorizontalScroller>
+          {/* Фильтры, сортировка и активные фильтры (чипы с крестиком) */}
           <div className="px-4 pb-2.5 flex items-center gap-2">
-            <HorizontalScroller className="flex-1 min-w-0">
-              {SCENE_PERIODS.map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setPeriod(id)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                    period === id ? 'bg-primary-500/15 text-primary-300 border border-primary-500/30' : 'text-slate-400 hover:text-white border border-transparent'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </HorizontalScroller>
             <button
               onClick={() => setFiltersOpen(true)}
               className={`flex-shrink-0 inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-xl text-sm font-medium border transition-colors ${
@@ -188,7 +190,7 @@ export default function ScenePage() {
               }`}
             >
               <SlidersHorizontal size={15} />
-              <span className="hidden sm:inline">Фильтры</span>
+              Фильтры
               {activeFilters > 0 && (
                 <span className="min-w-[18px] h-[18px] px-1 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{activeFilters}</span>
               )}
@@ -199,21 +201,20 @@ export default function ScenePage() {
               <select
                 value={sort}
                 onChange={(e) => setParams({ sort: e.target.value === 'date' ? null : e.target.value })}
-                className="appearance-none bg-transparent pl-8 pr-3 py-1.5 rounded-xl text-sm focus:outline-none cursor-pointer max-w-[9.5rem] sm:max-w-none"
+                className="appearance-none bg-transparent pl-8 pr-3 py-1.5 rounded-xl text-sm focus:outline-none cursor-pointer"
               >
                 {SCENE_SORTS.map(([id, label]) => <option key={id} value={id} className="bg-slate-900">{label}</option>)}
               </select>
             </label>
+            {activeFilters > 0 && (
+              <HorizontalScroller className="flex-1 min-w-0">
+                {fq && <FilterChip onClear={() => setParams({ q: null })}>«{fq}»</FilterChip>}
+                {fTypes.length > 0 && <FilterChip onClear={() => setParams({ type: null })}>{fTypes.join(', ')}</FilterChip>}
+                {fPrice > 0 && <FilterChip onClear={() => setParams({ price: null })}>{SCENE_PRICES.find(([v]) => v === fPrice)?.[1] ?? `до ${fPrice} ₽`}</FilterChip>}
+                {fMoooza && <FilterChip onClear={() => setParams({ moooza: null })}>Артисты Moooza</FilterChip>}
+              </HorizontalScroller>
+            )}
           </div>
-          {/* Активные фильтры — чипы с крестиком */}
-          {activeFilters > 0 && (
-            <HorizontalScroller className="mx-4 mb-2.5">
-              {fq && <FilterChip onClear={() => setParams({ q: null })}>«{fq}»</FilterChip>}
-              {fTypes.length > 0 && <FilterChip onClear={() => setParams({ type: null })}>{fTypes.join(', ')}</FilterChip>}
-              {fPrice > 0 && <FilterChip onClear={() => setParams({ price: null })}>{SCENE_PRICES.find(([v]) => v === fPrice)?.[1] ?? `до ${fPrice} ₽`}</FilterChip>}
-              {fMoooza && <FilterChip onClear={() => setParams({ moooza: null })}>Артисты Moooza</FilterChip>}
-            </HorizontalScroller>
-          )}
         </div>
 
         <div className="px-4 pt-4 space-y-4">
@@ -249,7 +250,7 @@ export default function ScenePage() {
                   {first.total} {plural(first.total, 'концерт', 'концерта', 'концертов')}
                 </p>
               )}
-              {days.map((d) => (
+              {sort === 'date' ? days.map((d) => (
                 <Fragment key={d.key}>
                   <h2 className="pt-1 text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                     <CalendarDays size={14} className="text-primary-400" /> {dayHeading(d.key)}
@@ -258,7 +259,12 @@ export default function ScenePage() {
                     {d.items.map((c) => <ConcertCard key={c.id} c={c} showCity={!citySlug} />)}
                   </div>
                 </Fragment>
-              ))}
+              )) : (
+                // Сортировка по цене / новизне — дни перемешаны: без заголовков, дата в карточке.
+                <div className="space-y-2">
+                  {items.map((c) => <ConcertCard key={c.id} c={c} showCity={!citySlug} showDate />)}
+                </div>
+              )}
               {concertsQ.hasNextPage && (
                 <button
                   onClick={() => concertsQ.fetchNextPage()}
@@ -416,8 +422,8 @@ function CityList({ cities, current, onPick }: { cities: SceneCity[]; current?: 
   );
 }
 
-function ConcertCard({ c, showCity }: { c: SceneConcert; showCity: boolean }) {
-  const time = concertTime(c);
+function ConcertCard({ c, showCity, showDate = false }: { c: SceneConcert; showCity: boolean; showDate?: boolean }) {
+  const time = [showDate ? concertDate(c, { day: 'numeric', month: 'short' }) : null, concertTime(c)].filter(Boolean).join(', ') || null;
   const price = priceLabel(c.priceFrom);
   const where = [c.venue, showCity ? c.cityName : null].filter(Boolean).join(' · ');
   return (
@@ -456,11 +462,11 @@ function ConcertCard({ c, showCity }: { c: SceneConcert; showCity: boolean }) {
               <Ticket size={14} /> Билеты
             </a>
           )}
-          {price && <span className="text-xs text-slate-300">{price}</span>}
+          {price && <span className="text-xs text-slate-300 whitespace-nowrap">{price}</span>}
           <Link to={`/concerts/${c.id}`} className="h-9 px-2.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800 inline-flex items-center">
             Подробнее
           </Link>
-          <span className="ml-auto text-[10px] text-slate-600">{SOURCE_LABEL[c.source]}</span>
+          <span className="ml-auto hidden sm:inline text-[10px] text-slate-600">{SOURCE_LABEL[c.source]}</span>
         </div>
       </div>
     </article>
