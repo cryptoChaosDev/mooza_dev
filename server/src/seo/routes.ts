@@ -23,10 +23,11 @@ import { renderOrder, renderVacancy } from './render/deals';
 import { renderLineup } from './render/lineup';
 import { renderFeed, renderHome, renderSearch, CATALOG_TABS, CatalogTab } from './render/lists';
 import { renderStaticDoc } from './render/static';
+import { renderSceneIndex, renderSceneCity } from './render/scene';
 
 export type SeoRouteKind =
   | 'home' | 'feed' | 'search' | 'artist' | 'release' | 'clip' | 'profile'
-  | 'service' | 'order' | 'vacancy' | 'lineup' | 'privacy' | 'terms';
+  | 'service' | 'order' | 'vacancy' | 'lineup' | 'privacy' | 'terms' | 'scene' | 'scene_city';
 
 export interface SeoRouteMatch {
   kind: SeoRouteKind;
@@ -124,6 +125,29 @@ export function resolveSeoRoute(path: string, query: URLSearchParams, envKey = '
         cacheKey: `${envKey}|search|${tab}|${filtered ? 'f' : ''}`,
         ttlMs: SEO_TTL.list,
         render: () => renderSearch(tab, { filtered }),
+      },
+    };
+  }
+  // «Сцена»: /scene и /scene/:город. Фильтры в адресе (?period=…) — noindex,follow.
+  if (path === '/scene') {
+    const filtered = meaningfulParams(query).length > 0;
+    return {
+      type: 'route',
+      match: { kind: 'scene', cacheKey: `${envKey}|scene|${filtered ? 'f' : ''}`, ttlMs: SEO_TTL.list, render: () => renderSceneIndex({ filtered }) },
+    };
+  }
+  const sceneCity = /^\/scene\/([^/]+)$/.exec(path);
+  if (sceneCity) {
+    const slug = decodeSegment(sceneCity[1]);
+    if (!slug) return { type: 'unknown' };
+    const filtered = meaningfulParams(query).length > 0;
+    return {
+      type: 'route',
+      match: {
+        kind: 'scene_city',
+        cacheKey: `${envKey}|scene_city|${slug}|${filtered ? 'f' : ''}`,
+        ttlMs: SEO_TTL.list,
+        render: () => renderSceneCity(slug, { filtered }),
       },
     };
   }

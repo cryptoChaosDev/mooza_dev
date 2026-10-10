@@ -714,7 +714,7 @@ export default function ArtistPage() {
           />
           <ArtistLatestRelease artistId={artist.id} release={releases[0]} />
           <ArtistSocialRow artistId={artist.id} links={bioLinks.social} />
-          <ArtistConcerts artistId={artist.id} artistName={artist.name} concerts={artist.ymData?.concerts} />
+          <ArtistConcerts artistId={artist.id} artistName={artist.name} concerts={artist.ymData?.concerts} canManage={viewerIsAdmin} />
         </div>
 
 

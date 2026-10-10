@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn, CalendarDays } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn, CalendarDays, Ticket } from 'lucide-react';
 import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
@@ -99,18 +99,21 @@ export default function Layout({ children }: LayoutProps) {
     ? [
         { path: '/feed', icon: Zap, label: 'Поток' },
         { path: '/search', icon: Search, label: 'Каталог' },
+        { path: '/scene', icon: Ticket, label: 'Сцена' },
         { path: '/lineups', icon: CalendarDays, label: 'Лайнапы' },
       ]
     : [
         { path: '/', icon: Home, label: 'Главная' },
         { path: '/search', icon: Search, label: 'Каталог' },
+        { path: '/scene', icon: Ticket, label: 'Сцена' },
         { path: '/lineups', icon: CalendarDays, label: 'Лайнапы' },
         { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
         { path: '/friends', icon: Users, label: 'Отношения' },
         { path: '/profile', icon: User, label: 'Профиль' },
       ];
 
-  const isActive = (path: string) => location.pathname === path;
+  // «Сцена» активна и на странице города (/scene/:city).
+  const isActive = (path: string) => location.pathname === path || (path === '/scene' && location.pathname.startsWith('/scene/'));
 
   // Full-screen pages bypass all Layout chrome: онбординг, экраны входа и
   // лендинг гостя (у них своя вёрстка на весь экран).

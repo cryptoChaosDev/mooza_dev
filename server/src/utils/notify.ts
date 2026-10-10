@@ -24,6 +24,8 @@ export function categoryOfNotification(type: string): NotifCategory | null {
   // «Социальное» в настройках = «Друзья, связи, ответы на посты, отзывы»
   if (
     type === 'social' || type === 'post_reply' || type === 'saved' || type.startsWith('review') ||
+    // «Сцена»: концерт артиста, на которого подписан, в моём городе
+    type.startsWith('scene_') ||
     type.startsWith('friend_') || type.startsWith('connection_')
   ) return 'social';
   return null;

@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Zap, LogIn } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Zap, LogIn, Ticket } from 'lucide-react';
 import { useBadgeStore } from '../stores/badgeStore';
 import { useAuthStore } from '../stores/authStore';
 import { useKeyboardViewport } from '../lib/viewport';
@@ -24,7 +24,7 @@ export default function BottomNav() {
   const navigate = useNavigate();
   const isGuest = !useAuthStore((s) => s.token);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || (path === '/scene' && location.pathname.startsWith('/scene/'));
 
   if (keyboard.open) return null;
 
@@ -33,6 +33,7 @@ export default function BottomNav() {
     const guestItems = [
       { path: '/feed',   icon: Zap,    label: 'Поток' },
       { path: '/search', icon: Search, label: 'Каталог' },
+      { path: '/scene',  icon: Ticket, label: 'Сцена' },
     ];
     return (
       <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>

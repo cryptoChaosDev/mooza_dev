@@ -70,6 +70,7 @@ const OrderDetailPage          = lazy(() => import('./pages/OrderDetailPage'));
 const VacanciesPage            = lazy(() => import('./pages/VacanciesPage'));
 const VacancyDetailPage        = lazy(() => import('./pages/VacancyDetailPage'));
 const LineupsPage              = lazy(() => import('./pages/LineupsPage'));
+const ScenePage                = lazy(() => import('./pages/ScenePage'));
 const LineupDetailPage         = lazy(() => import('./pages/LineupDetailPage'));
 const LineupFormPage           = lazy(() => import('./pages/LineupFormPage'));
 const OnboardingPage     = lazy(() => import('./pages/OnboardingPage'));
@@ -252,6 +253,9 @@ function AppRoutes() {
             {/* «Биржа лайнапов» — /lineups/new и /lineups/:id/edit объявлены ниже (RequireAuth) */}
             <Route path="/lineups"          element={<PublicRoute><LineupsPage /></PublicRoute>} />
             <Route path="/lineups/:id"      element={<PublicRoute><LineupDetailPage /></PublicRoute>} />
+            {/* «Сцена» — концерты по городам */}
+            <Route path="/scene"            element={<PublicRoute><ScenePage /></PublicRoute>} />
+            <Route path="/scene/:city"      element={<PublicRoute><ScenePage /></PublicRoute>} />
             <Route path="/find"            element={<PublicRoute><FindMusicianPage /></PublicRoute>} />
             {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
             <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />

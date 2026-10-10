@@ -4,6 +4,7 @@ import logger from './logger';
 import { tgLog } from './telegram';
 import { notify } from './notify';
 import { isUniqueViolation } from '../lib/artistAccess';
+import { syncYmConcerts, notifyNewConcerts } from '../lib/sceneConcerts';
 import {
   YM_SOURCE,
   ymAlbumIdFromUrl,
@@ -347,6 +348,13 @@ export async function syncArtistFromYandexMusic(
     written = count > 0;
   }
   if (!written) return null;
+
+  // «Сцена»: концерты из витрины — в общую таблицу (+ push подписчикам из города).
+  try {
+    if ((await syncYmConcerts(artist, (vitrine as any).concerts)) > 0) await notifyNewConcerts();
+  } catch (e: any) {
+    logger.warn(`YM concerts → scene failed for ${artist.name}: ${e?.message}`);
+  }
 
   // 5. Точка истории слушателей — не чаще раза в 20 часов (ручной прогон
   //    после ночного не плодит дубли), для графика динамики.

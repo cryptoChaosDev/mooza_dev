@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Menu, ChevronRight, UserSearch, CalendarDays, Gift, Zap, Settings, ShieldCheck, Info, LifeBuoy, Smartphone,
+  Menu, ChevronRight, UserSearch, CalendarDays, Gift, Zap, Settings, ShieldCheck, Info, LifeBuoy, Smartphone, Ticket,
 } from 'lucide-react';
 import BottomSheet from './BottomSheet';
 import InfoModal from './InfoModal';
@@ -24,6 +24,7 @@ export default function MobileMenu({ isAdmin }: { isAdmin?: boolean }) {
 
   const items: { icon: typeof Menu; label: string; hint?: string; onClick: () => void; accent?: boolean }[] = [
     { icon: UserSearch, label: 'Ищу музыканта', hint: 'Запрос одной фразой', onClick: () => go('/find'), accent: true },
+    { icon: Ticket, label: 'Сцена', hint: 'Концерты в вашем городе', onClick: () => go('/scene'), accent: true },
     { icon: CalendarDays, label: 'Лайнапы', hint: 'Артисты на концерты', onClick: () => go('/lineups') },
     { icon: Gift, label: 'Пригласить друзей', onClick: () => go('/invite') },
     { icon: Zap, label: 'Moooza Pro', onClick: () => go('/pro') },

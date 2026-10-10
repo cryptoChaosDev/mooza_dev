@@ -42,6 +42,9 @@ const mockPrisma = {
   release: { findMany: jest.fn(async () => []), createMany: jest.fn(async () => ({ count: 1 })), update: jest.fn() },
   clip: { findMany: jest.fn(async () => []), createMany: jest.fn(async () => ({ count: 1 })) },
   userArtist: { findMany: jest.fn(async () => [{ userId: 'owner1' }]) },
+  // «Сцена»: концерты из витрины ЯМ (lib/sceneConcerts.syncYmConcerts).
+  concert: { findUnique: jest.fn(async () => null), create: jest.fn(async () => ({})), update: jest.fn(), deleteMany: jest.fn(async () => ({ count: 0 })), findMany: jest.fn(async () => []), updateMany: jest.fn(async () => ({ count: 0 })), count: jest.fn(async () => 0) },
+  artistFollower: { findMany: jest.fn(async () => []) },
 };
 jest.mock('../index', () => ({ prisma: mockPrisma }));
 const mockNotify = jest.fn();

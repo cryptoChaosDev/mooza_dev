@@ -15,13 +15,14 @@ import {
   listSitemapArtists, listSitemapReleases, listSitemapClips, listSitemapProfiles,
   listSitemapServices, listSitemapVacancies, listSitemapOrders, listSitemapLineups, SitemapEntry,
 } from '../lib/publicData';
+import { listSitemapScene } from '../lib/sceneConcerts';
 import { cached, SEO_TTL } from './cache';
 import { escapeXml, isoDateTime } from './html';
 import { siteUrl } from './render/common';
 
 export const SITEMAP_CHUNK_SIZE = 45_000;
 
-export const SITEMAP_TYPES = ['static', 'artists', 'releases', 'clips', 'profiles', 'services', 'vacancies', 'orders', 'lineups'] as const;
+export const SITEMAP_TYPES = ['static', 'artists', 'releases', 'clips', 'profiles', 'services', 'vacancies', 'orders', 'lineups', 'scene'] as const;
 export type SitemapType = (typeof SITEMAP_TYPES)[number];
 
 /** Публичные страницы без БД. */
@@ -38,6 +39,7 @@ const LOADERS: Record<Exclude<SitemapType, 'static'>, () => Promise<SitemapEntry
   vacancies: listSitemapVacancies,
   orders: listSitemapOrders,
   lineups: () => listSitemapLineups(),
+  scene: () => listSitemapScene(),
 };
 
 export function isSitemapType(v: string): v is SitemapType {

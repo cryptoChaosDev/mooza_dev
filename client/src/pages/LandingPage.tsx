@@ -200,6 +200,7 @@ export default function LandingPage() {
                 <>
                   <Link to="/feed" className={`${navLink} hidden xs:inline-flex`}>Лента</Link>
                   <Link to="/search" className={navLink}>Каталог</Link>
+                  <Link to="/scene" className={`${navLink} hidden xs:inline-flex`}>Сцена</Link>
                   <Link to="/search?tab=artists" className={`${navLink} hidden sm:inline-flex`}>Артисты</Link>
                   <Link to="/lineups" className={`${navLink} hidden md:inline-flex`}>Лайнапы</Link>
                 </>

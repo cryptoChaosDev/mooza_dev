@@ -73,6 +73,19 @@ router.post('/ym-sync', async (req, res) => {
   }
 });
 
+// «Сцена»: ручной импорт афиши Qtickets. { cities?: string[] } — только эти города
+// (проверка на DEV); без него — все города каталога, как ночной прогон.
+router.post('/scene/import', async (req, res) => {
+  try {
+    const { runQticketsImport } = await import('../lib/sceneConcerts');
+    const cities = Array.isArray(req.body?.cities) ? (req.body.cities as unknown[]).filter((c): c is string => typeof c === 'string') : undefined;
+    runQticketsImport({ cities }).catch(() => {});
+    res.json({ started: true, cities: cities ?? 'all' });
+  } catch (e: any) {
+    return adminError(res, 'POST /scene/import', e, 500);
+  }
+});
+
 // ─── Waitlist (landing sign-ups) ─────────────────────────────────────────────
 // Приглашения, статусы и письма — lib/waitlist.ts.
 router.get('/waitlist', async (req, res) => {

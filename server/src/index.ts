@@ -10,6 +10,7 @@ import { PrismaClient } from '@prisma/client';
 import { initSocket } from './socket';
 import { startScheduler } from './scheduler';
 import { scheduleYandexMusicSync } from './utils/yandexMusicSync';
+import { backfillYmConcerts, scheduleQticketsImport } from './lib/sceneConcerts';
 
 // Import rate limiters
 import { apiLimiter } from './middleware/rateLimiter';
@@ -243,6 +244,7 @@ app.use('/api/vacancies', vacancyRoutes);
 app.use('/api/artist-lookup', artistLookupRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/lineups', require('./routes/lineups').default); // «Биржа лайнапов»
+app.use('/api/scene', require('./routes/scene').default); // «Сцена» — концерты по городам
 app.use('/api/requests', requestRoutes);
 
 // ── Старый OG-эндпоинт профиля ─────────────────────────────────────────────
@@ -316,6 +318,12 @@ httpServer.listen(PORT, () => {
   startScheduler();
   // Ночной синк с Яндекс.Музыкой (04:30 МСК) — привязанные артисты
   scheduleYandexMusicSync();
+  // «Сцена»: ночной импорт афиши Qtickets (05:30 МСК, env QTICKETS_IMPORT=true) и
+  // концерты из уже сохранённых витрин ЯМ (идемпотентно, обычно 0 новых).
+  scheduleQticketsImport();
+  backfillYmConcerts()
+    .then((n) => { if (n > 0) logger.info(`[scene] backfilled ${n} concert(s) from Yandex Music`); })
+    .catch((err) => logger.error('[scene] YM concerts backfill failed', { error: err?.message }));
   // Страховка: слаг артистам без него (основное заполнение — миграция
   // 20261011010000_seo_artist_slug). Идемпотентно, обычно 0.
   backfillArtistSlugs()

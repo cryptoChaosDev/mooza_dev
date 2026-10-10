@@ -429,6 +429,7 @@ model Artist {
   pageStats          ArtistPageStat[]
   lineupResponses    LineupResponse[]
   lineupMatches      LineupMatch[]
+  concerts           Concert[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -701,6 +702,8 @@ model User {
 
   // Биржа лайнапов — см. модель LineupRequest
   lineupRequests          LineupRequest[]  @relation("LineupRequestAuthor")
+  // «Сцена»: концерты, добавленные пользователем от имени артиста
+  concertsCreated         Concert[]        @relation("ConcertCreator")
   lineupResponsesSubmitted LineupResponse[] @relation("LineupResponseSubmitter")
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
@@ -1967,4 +1970,48 @@ model OrderMatchNotification {
 
   @@unique([orderId, userId])
   @@index([userId, createdAt])
+}
+
+// ─── «Сцена»: концерты по городам ─────────────────────────────────────────────
+// Источники: YANDEX_MUSIC — из синка ЯМ (lib/sceneConcerts.syncYmConcerts, только
+// артисты Moooza), MANUAL — добавил админ артиста, QTICKETS — афиша Qtickets
+// (lib/qtickets, по договорённости; артист — если название совпало с проверенным).
+model Concert {
+  id          String    @id @default(uuid())
+  source      String
+  // id в источнике: QTICKETS — id события, YANDEX_MUSIC — хэш артист+дата+город.
+  externalId  String?
+  artistId    String?
+  title       String
+  // Тип в источнике (Qtickets: Концерт / Фестиваль / Рейв / Вечеринка).
+  type        String?
+  startsAt    DateTime
+  // false — в источнике только дата (ЯМ без времени): время не показываем.
+  hasTime     Boolean   @default(true)
+  // Смещение местного времени города от UTC в минутах (Самара — 240): время
+  // концерта показываем по городу, а не по Москве. null — неизвестно (МСК).
+  utcOffsetMin Int?
+  cityName    String
+  // lib/qtickets.cityKey(cityName): нижний регистр, ё→е — фильтр городов и слаг.
+  cityKey     String
+  venue       String?
+  address     String?
+  // Страница события в источнике (Qtickets / Яндекс Афиша) и ссылка на билеты.
+  url         String?
+  ticketUrl   String?
+  imageUrl    String?
+  priceFrom   Int?
+  createdById String?
+  // Push подписчикам артиста о концерте в их городе уже отправлен.
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  artist    Artist? @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("ConcertCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([source, externalId])
+  @@index([cityKey, startsAt])
+  @@index([artistId, startsAt])
+  @@index([startsAt])
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2, Zap, Send, Loader2 } from 'lucide-react';
+import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2, Zap, Send, Loader2, Ticket } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
@@ -84,6 +84,8 @@ function typeIcon(type: string) {
     case 'artist_rejected':       return <ShieldX       size={13} className="text-red-400" />;
     // Админам платформы: новая заявка на верификацию (lib/artistModerationNotify)
     case 'admin_artist_verification': return <ShieldCheck size={13} className="text-amber-400" />;
+    // «Сцена»: концерт артиста, на которого подписан, в моём городе
+    case 'scene_concert':         return <Ticket        size={13} className="text-emerald-400" />;
     // ── Releases ───────────────────────────────────────────────────────────
     case 'release_participant_invite':    return <Disc3 size={13} className="text-primary-400" />;
     case 'release_participant_confirmed': return <Disc3 size={13} className="text-green-400" />;
