@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   Ticket, MapPin, ChevronRight, Loader2, RefreshCw, Search, BadgeCheck, CalendarDays, Music2, Clock,
@@ -21,6 +21,8 @@ import {
 
 const PERIOD_IDS = SCENE_PERIODS.map(([id]) => id);
 const LAST_CITY_KEY = 'mooza_scene_city';
+/** Явный выбор «Все города» — не перебрасывать на город профиля / последний. */
+const ALL_CITIES = 'all';
 const cityKey = (s: string) => s.toLowerCase().replace(/ё/g, 'е').trim();
 
 /**
@@ -32,6 +34,7 @@ export default function ScenePage() {
   const { city: citySlug } = useParams<{ city?: string }>();
   const [sp, setSp] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const rawPeriod = sp.get('period') as ScenePeriod | null;
   const period: ScenePeriod = rawPeriod && PERIOD_IDS.includes(rawPeriod) ? rawPeriod : 'all';
@@ -40,13 +43,16 @@ export default function ScenePage() {
   const citiesQ = useQuery({ queryKey: ['scene', 'cities'], queryFn: sceneAPI.cities, staleTime: 5 * 60_000 });
   const cities = citiesQ.data ?? [];
 
-  // Без города в адресе — город профиля (или последний выбранный), если там есть концерты.
+  // Без города в адресе — последний выбранный город (или город профиля), если там есть
+  // концерты. Явный выбор «Все города» (кнопка или запомненный) — оставляем всю страну.
   useEffect(() => {
     if (citySlug || !citiesQ.data) return;
+    if ((location.state as { allCities?: boolean } | null)?.allCities) return;
     let remembered: string | null = null;
     try { remembered = localStorage.getItem(LAST_CITY_KEY); } catch { /* приватный режим */ }
+    if (remembered === ALL_CITIES) return;
     const profile = user?.city ? citiesQ.data.find((c) => cityKey(c.name) === cityKey(user.city!)) : undefined;
-    const target = profile ?? citiesQ.data.find((c) => c.slug === remembered);
+    const target = citiesQ.data.find((c) => c.slug === remembered) ?? profile;
     if (target) navigate(`/scene/${target.slug}${sp.toString() ? `?${sp}` : ''}`, { replace: true });
   }, [citySlug, citiesQ.data, user?.city]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -83,7 +89,10 @@ export default function ScenePage() {
   };
   const goCity = (slug: string | null) => {
     setPickerOpen(false);
-    navigate(`${slug ? `/scene/${slug}` : '/scene'}${period !== 'all' ? `?period=${period}` : ''}`);
+    if (!slug) {
+      try { localStorage.setItem(LAST_CITY_KEY, ALL_CITIES); } catch { /* приватный режим */ }
+    }
+    navigate(`${slug ? `/scene/${slug}` : '/scene'}${period !== 'all' ? `?period=${period}` : ''}`, { state: slug ? null : { allCities: true } });
   };
 
   // Лента по дням (местное время города концерта).
