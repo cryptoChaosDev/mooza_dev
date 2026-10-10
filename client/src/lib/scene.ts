@@ -79,6 +79,16 @@ export interface SceneConcertPage {
   page: number;
   hasMore: boolean;
   total: number;
+  /** Точных совпадений не было — показаны похожие (поиск с опечатками). */
+  fuzzy?: boolean;
+}
+
+export interface SceneSuggestions {
+  events: Array<Pick<SceneConcert, 'id' | 'title' | 'startsAt' | 'hasTime' | 'utcOffsetMin' | 'cityName' | 'venue' | 'imageUrl'>>;
+  artists: Array<{ id: string; slug: string | null; name: string; avatar: string | null }>;
+  venues: Array<{ name: string; cityName: string; count: number }>;
+  cities: SceneCity[];
+  fuzzy?: boolean;
 }
 
 export interface NewConcertPayload {
@@ -96,6 +106,8 @@ export const sceneAPI = {
   concerts: (params: { city?: string; period?: ScenePeriod; page?: number; limit?: number } & SceneFilterParams) =>
     api.get<SceneConcertPage>('/scene/concerts', { params }).then((r) => r.data),
   concert: (id: string) => api.get<SceneConcertPageData>(`/scene/concerts/${id}`).then((r) => r.data),
+  suggest: (q: string, city?: string) =>
+    api.get<SceneSuggestions>('/scene/suggest', { params: { q, city } }).then((r) => r.data),
   artistConcerts: (artistId: string) =>
     api.get<{ items: SceneConcert[] }>(`/scene/artist/${artistId}/concerts`).then((r) => r.data.items),
   addConcert: (data: NewConcertPayload) => api.post<{ id: string }>('/scene/concerts', data),

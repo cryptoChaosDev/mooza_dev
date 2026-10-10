@@ -16,6 +16,7 @@ import { notify } from '../utils/notify';
 import { tgLog } from '../utils/telegram';
 import logger from '../utils/logger';
 import { slugifyArtistName } from './artistSlug';
+import { normSearch, searchTokens, tokenVariants } from './searchQuery';
 import {
   cityKey, crawlQticketsCity, fetchQticketsCities, fetchQticketsEventDetails, isoOffsetMinutes, qticketsTicketUrl,
   type QticketsItem,
@@ -238,7 +239,10 @@ export const SCENE_SORTS = ['date', 'price_asc', 'price_desc', 'new'] as const;
 export type SceneSort = (typeof SCENE_SORTS)[number];
 
 export interface SceneFilters {
-  /** Название события, артист или площадка (без учёта регистра). */
+  /**
+   * Поиск: событие, площадка, город, артист. Регистр и «ё» не важны, слова в любом
+   * порядке, части слов, другая раскладка и транслит (lib/searchQuery).
+   */
   q?: string | null;
   types?: string[];
   /** Цена «до N ₽»: события без цены не попадают. */
@@ -247,19 +251,49 @@ export interface SceneFilters {
   mooozaOnly?: boolean;
 }
 
+/**
+ * Каждое слово запроса (в любом из вариантов написания) должно найтись в событии
+ * (searchNorm: название, площадка, город, тип, организатор) или в имени артиста.
+ */
+export function sceneSearchWhere(tokens: string[]): Prisma.ConcertWhereInput[] {
+  return tokens.map((t) => ({
+    OR: tokenVariants(t).flatMap((v) => [
+      { searchNorm: { contains: v } },
+      { artist: { nameNorm: { contains: v } } },
+    ]),
+  }));
+}
+
+/** Порог похожести слова для поиска с опечатками (pg_trgm word_similarity). */
+const FUZZY_THRESHOLD = 0.45;
+
+/**
+ * Поиск с опечатками, когда строгий ничего не нашёл: id концертов, где каждое
+ * слово похоже на что-то в событии или имени артиста. Без pg_trgm — пусто.
+ */
+async function fuzzyConcertIds(tokens: string[], range: { from: Date; to: Date }, cityKeyFilter: string | null): Promise<string[]> {
+  if (!tokens.length) return [];
+  try {
+    const conds = tokens.map((t) => Prisma.sql`greatest(word_similarity(${t}, coalesce(c."searchNorm", '')), word_similarity(${t}, coalesce(a."nameNorm", ''))) >= ${FUZZY_THRESHOLD}`);
+    const score = Prisma.join(tokens.map((t) => Prisma.sql`greatest(word_similarity(${t}, coalesce(c."searchNorm", '')), word_similarity(${t}, coalesce(a."nameNorm", '')))`), ' + ');
+    const rows = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT c.id FROM "Concert" c LEFT JOIN "Artist" a ON a.id = c."artistId"
+      WHERE c."startsAt" >= ${range.from} AND c."startsAt" < ${range.to}
+        ${cityKeyFilter ? Prisma.sql`AND c."cityKey" = ${cityKeyFilter}` : Prisma.empty}
+        AND (c."artistId" IS NULL OR a.status IN ('VERIFIED', 'APPROVED'))
+        AND ${Prisma.join(conds, ' AND ')}
+      ORDER BY ${score} DESC
+      LIMIT 300`;
+    return rows.map((r) => r.id);
+  } catch (e: any) {
+    logger.warn(`[scene] fuzzy search unavailable: ${e?.message}`);
+    return [];
+  }
+}
+
 /** Условия фильтров «Сцены» (без города и периода). */
 export function sceneFilterWhere(f: SceneFilters): Prisma.ConcertWhereInput[] {
-  const and: Prisma.ConcertWhereInput[] = [];
-  const q = f.q?.trim().slice(0, 100);
-  if (q) {
-    and.push({
-      OR: [
-        { title: { contains: q, mode: 'insensitive' } },
-        { venue: { contains: q, mode: 'insensitive' } },
-        { artist: { name: { contains: q, mode: 'insensitive' } } },
-      ],
-    });
-  }
+  const and: Prisma.ConcertWhereInput[] = [...sceneSearchWhere(searchTokens(f.q?.slice(0, 100)))];
   const types = (f.types ?? []).filter((t) => (SCENE_TYPES as readonly string[]).includes(t));
   if (types.length) and.push({ type: { in: types } });
   if (f.priceMax != null && f.priceMax > 0) and.push({ priceFrom: { not: null, lte: f.priceMax } });
@@ -280,17 +314,26 @@ function sceneOrderBy(sort: SceneSort): Prisma.ConcertOrderByWithRelationInput[]
 export async function listSceneConcerts(opts: {
   cityKey?: string | null; period?: ScenePeriod; page?: number; limit?: number; now?: Date;
   filters?: SceneFilters; sort?: SceneSort;
-}): Promise<{ items: ConcertDTO[]; page: number; hasMore: boolean; total: number }> {
+}): Promise<{ items: ConcertDTO[]; page: number; hasMore: boolean; total: number; fuzzy?: boolean }> {
   const page = Math.max(1, opts.page ?? 1);
   const limit = Math.min(50, Math.max(1, opts.limit ?? 20));
-  const { from, to } = periodRange(opts.period ?? 'all', opts.now);
-  const where: Prisma.ConcertWhereInput = {
-    AND: [
-      sceneVisible, { startsAt: { gte: from, lt: to } },
-      ...(opts.cityKey ? [{ cityKey: opts.cityKey }] : []),
-      ...sceneFilterWhere(opts.filters ?? {}),
-    ],
-  };
+  const range = periodRange(opts.period ?? 'all', opts.now);
+  const { from, to } = range;
+  const base: Prisma.ConcertWhereInput[] = [
+    sceneVisible, { startsAt: { gte: from, lt: to } },
+    ...(opts.cityKey ? [{ cityKey: opts.cityKey }] : []),
+  ];
+  let where: Prisma.ConcertWhereInput = { AND: [...base, ...sceneFilterWhere(opts.filters ?? {})] };
+  // Строгий поиск пуст — пробуем с опечатками (остальные фильтры сохраняются).
+  let fuzzy = false;
+  const tokens = searchTokens(opts.filters?.q?.slice(0, 100));
+  if (tokens.length && (await prisma.concert.count({ where })) === 0) {
+    const ids = await fuzzyConcertIds(tokens, range, opts.cityKey ?? null);
+    if (ids.length) {
+      fuzzy = true;
+      where = { AND: [...base, { id: { in: ids } }, ...sceneFilterWhere({ ...opts.filters, q: null })] };
+    }
+  }
   const [rows, total] = await Promise.all([
     prisma.concert.findMany({
       where, select: CONCERT_SELECT, orderBy: sceneOrderBy(opts.sort ?? 'date'),
@@ -299,7 +342,74 @@ export async function listSceneConcerts(opts: {
     prisma.concert.count({ where }),
   ]);
   const hasMore = rows.length > limit;
-  return { items: dedupeConcerts(rows.slice(0, limit)).map(serializeConcert), page, hasMore, total };
+  return { items: dedupeConcerts(rows.slice(0, limit)).map(serializeConcert), page, hasMore, total, ...(fuzzy ? { fuzzy } : {}) };
+}
+
+export interface SceneSuggestions {
+  events: Array<{ id: string; title: string; startsAt: string; hasTime: boolean; utcOffsetMin: number; cityName: string; venue: string | null; imageUrl: string | null }>;
+  artists: Array<{ id: string; slug: string | null; name: string; avatar: string | null }>;
+  venues: Array<{ name: string; cityName: string; count: number }>;
+  cities: Array<{ slug: string; name: string; upcoming: number }>;
+  fuzzy?: boolean;
+}
+
+/** Подсказки по мере набора: события, артисты Moooza, площадки, города. */
+export async function sceneSuggest(q: string, cityKeyFilter: string | null, now = new Date()): Promise<SceneSuggestions> {
+  const tokens = searchTokens(q.slice(0, 100));
+  const empty: SceneSuggestions = { events: [], artists: [], venues: [], cities: [] };
+  if (!tokens.length) return empty;
+  const range = periodRange('all', now);
+  const base: Prisma.ConcertWhereInput[] = [
+    sceneVisible, { startsAt: { gte: range.from, lt: range.to } },
+    ...(cityKeyFilter ? [{ cityKey: cityKeyFilter }] : []),
+  ];
+  const select = {
+    id: true, title: true, startsAt: true, hasTime: true, utcOffsetMin: true, cityName: true, venue: true, imageUrl: true,
+    artist: { select: { id: true, slug: true, name: true, avatar: true } },
+  } satisfies Prisma.ConcertSelect;
+  let rows = await prisma.concert.findMany({
+    where: { AND: [...base, ...sceneSearchWhere(tokens)] }, select, orderBy: { startsAt: 'asc' }, take: 60,
+  });
+  let fuzzy = false;
+  if (!rows.length) {
+    const ids = await fuzzyConcertIds(tokens, range, cityKeyFilter);
+    if (ids.length) {
+      fuzzy = true;
+      const byId = new Map((await prisma.concert.findMany({ where: { id: { in: ids.slice(0, 60) } }, select })).map((r) => [r.id, r]));
+      rows = ids.slice(0, 60).map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+    }
+  }
+  // Что именно совпало — по нормализованным вариантам слов.
+  const variants = tokens.flatMap(tokenVariants);
+  const hits = (s: string | null | undefined) => !!s && variants.some((v) => normSearch(s).includes(v));
+
+  const artists = new Map<string, SceneSuggestions['artists'][number]>();
+  const venues = new Map<string, SceneSuggestions['venues'][number]>();
+  for (const r of rows) {
+    if (r.artist && (fuzzy || hits(r.artist.name)) && !artists.has(r.artist.id)) {
+      artists.set(r.artist.id, { id: r.artist.id, slug: r.artist.slug ?? null, name: r.artist.name, avatar: r.artist.avatar ?? null });
+    }
+    if (r.venue && hits(r.venue)) {
+      const key = `${normSearch(r.venue)}|${r.cityName}`;
+      const v = venues.get(key);
+      if (v) v.count++; else venues.set(key, { name: r.venue, cityName: r.cityName, count: 1 });
+    }
+  }
+  const cities = (await listSceneCities(now))
+    .filter((c) => variants.some((v) => normSearch(c.name).startsWith(v)) || hits(c.name))
+    .slice(0, 3);
+  return {
+    events: dedupeConcerts(rows.map((r) => ({ ...r, artistId: r.artist?.id ?? null, cityKey: cityKey(r.cityName), source: 'X' })))
+      .slice(0, 5)
+      .map((r) => ({
+        id: r.id, title: r.title, startsAt: localIso(r.startsAt, r.utcOffsetMin), hasTime: r.hasTime,
+        utcOffsetMin: r.utcOffsetMin ?? MSK_OFFSET_MIN, cityName: r.cityName, venue: r.venue, imageUrl: r.imageUrl,
+      })),
+    artists: [...artists.values()].slice(0, 4),
+    venues: [...venues.values()].sort((a, b) => b.count - a.count).slice(0, 3),
+    cities,
+    ...(fuzzy ? { fuzzy } : {}),
+  };
 }
 
 /** Предстоящие концерты артиста (визитка) — все источники, без фильтра видимости. */

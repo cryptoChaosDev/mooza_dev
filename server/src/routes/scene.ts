@@ -8,7 +8,7 @@ import { getArtistAccess } from '../lib/artistAccess';
 import { cityKey } from '../lib/qtickets';
 import {
   SCENE_PERIODS, SCENE_SORTS, ScenePeriod, SceneSort, cityUtcOffset, getConcertDetail, listArtistConcerts,
-  listSceneCities, listSceneConcerts, notifyNewConcerts, resolveSceneCity,
+  listSceneCities, listSceneConcerts, notifyNewConcerts, resolveSceneCity, sceneSuggest,
 } from '../lib/sceneConcerts';
 
 const router = Router();
@@ -50,6 +50,17 @@ router.get('/concerts', optionalAuthenticate, guestReadLimiter, async (req: Auth
     const data = await listSceneConcerts({ cityKey: city?.key ?? null, period, page, limit, filters, sort });
     return res.json({ city: city ? { slug: city.slug, name: city.name } : null, period, sort, ...data });
   } catch (err) { return fail500(res, 'GET /concerts', err); }
+});
+
+// GET /api/scene/suggest?q=&city=<slug> — подсказки по мере набора (события,
+// артисты Moooza, площадки, города). Регистр, «ё», раскладка, транслит, опечатки.
+router.get('/suggest', optionalAuthenticate, guestReadLimiter, async (req, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const slug = typeof req.query.city === 'string' ? req.query.city.slice(0, 80) : '';
+    const city = slug ? await resolveSceneCity(slug) : null;
+    return res.json(await sceneSuggest(q, city?.key ?? null));
+  } catch (err) { return fail500(res, 'GET /suggest', err); }
 });
 
 // GET /api/scene/concerts/:id — страница концерта: подробности + ещё концерты

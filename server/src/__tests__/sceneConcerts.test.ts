@@ -12,6 +12,7 @@ const mockPrisma: any = {
     deleteMany: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), count: jest.fn(), groupBy: jest.fn(),
   },
   artist: { findMany: jest.fn(), findUnique: jest.fn() },
+  $queryRaw: jest.fn(),
   artistFollower: { findMany: jest.fn() },
   city: { findMany: jest.fn(), findFirst: jest.fn() },
 };
@@ -340,12 +341,15 @@ describe('фильтры и сортировка «Сцены»', () => {
     expect(res.body.sort).toBe('price_asc');
     const args = whereOf();
     const and = args.where.AND;
+    // Поиск: слово в любом варианте (как набрано, транслит) — в событии или у артиста.
+    const search = and.find((c: any) => Array.isArray(c.OR) && c.OR.some((o: any) => o.searchNorm));
+    expect(search.OR).toEqual(expect.arrayContaining([
+      { searchNorm: { contains: 'kursha' } },
+      { artist: { nameNorm: { contains: 'kursha' } } },
+      { searchNorm: { contains: 'курша' } },
+      { artist: { nameNorm: { contains: 'курша' } } },
+    ]));
     expect(and).toEqual(expect.arrayContaining([
-      { OR: [
-        { title: { contains: 'kursha', mode: 'insensitive' } },
-        { venue: { contains: 'kursha', mode: 'insensitive' } },
-        { artist: { name: { contains: 'kursha', mode: 'insensitive' } } },
-      ] },
       { type: { in: ['Концерт', 'Рейв'] } }, // «Опера» — не тип «Сцены»
       { priceFrom: { not: null, lte: 1000 } },
       { artistId: { not: null } },
@@ -363,6 +367,44 @@ describe('фильтры и сортировка «Сцены»', () => {
   it('«новые в афише» — по дате добавления', async () => {
     await request(app).get('/api/scene/concerts').query({ sort: 'new' });
     expect(whereOf().orderBy[0]).toEqual({ createdAt: 'desc' });
+  });
+});
+
+describe('поиск «Сцены»: опечатки и подсказки', () => {
+  it('строгий поиск пуст — похожие (pg_trgm), фильтры сохраняются, помечено fuzzy', async () => {
+    mockPrisma.concert.count.mockResolvedValueOnce(0).mockResolvedValue(2);
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
+    const res = await request(app).get('/api/scene/concerts').query({ q: 'вечиринка', type: 'Вечеринка' });
+    expect(res.status).toBe(200);
+    expect(res.body.fuzzy).toBe(true);
+    const and = mockPrisma.concert.findMany.mock.calls[0][0].where.AND;
+    expect(and).toEqual(expect.arrayContaining([{ id: { in: ['c1', 'c2'] } }, { type: { in: ['Вечеринка'] } }]));
+    expect(and.some((c: any) => Array.isArray(c.OR) && c.OR.some((o: any) => o.searchNorm))).toBe(false);
+  });
+
+  it('pg_trgm недоступен — просто пустой результат, без ошибки', async () => {
+    mockPrisma.concert.count.mockResolvedValue(0);
+    mockPrisma.$queryRaw.mockRejectedValue(new Error('function word_similarity does not exist'));
+    const res = await request(app).get('/api/scene/concerts').query({ q: 'абвгд' });
+    expect(res.status).toBe(200);
+    expect(res.body.fuzzy).toBeUndefined();
+  });
+
+  it('подсказки: события, артист (по транслиту), площадка, город', async () => {
+    const at = new Date(Date.now() + 3 * 864e5);
+    mockPrisma.concert.findMany.mockResolvedValue([
+      { id: 'c1', title: 'Kursha — тур', startsAt: at, hasTime: true, utcOffsetMin: 240, cityName: 'Самара', venue: 'Клуб Курша', imageUrl: null,
+        artist: { id: 'a1', slug: 'kursha', name: 'Kursha', avatar: null } },
+    ]);
+    mockPrisma.concert.groupBy.mockResolvedValue([{ cityKey: 'самара', cityName: 'Самара', _count: { _all: 5 } }]);
+    const res = await request(app).get('/api/scene/suggest').query({ q: 'курша' });
+    expect(res.status).toBe(200);
+    expect(res.body.events).toEqual([expect.objectContaining({ id: 'c1', startsAt: expect.stringMatching(/\+04:00$/) })]);
+    expect(res.body.artists).toEqual([{ id: 'a1', slug: 'kursha', name: 'Kursha', avatar: null }]);
+    expect(res.body.venues).toEqual([{ name: 'Клуб Курша', cityName: 'Самара', count: 1 }]);
+
+    const city = await request(app).get('/api/scene/suggest').query({ q: 'сама' });
+    expect(city.body.cities).toEqual([{ slug: 'samara', name: 'Самара', upcoming: 5 }]);
   });
 });
 

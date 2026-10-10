@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
@@ -19,7 +19,7 @@ import { reachGoal } from '../lib/metrika';
 import {
   sceneAPI, SCENE_PERIODS, SCENE_PRICES, SCENE_SORTS, SCENE_TYPES, SOURCE_LABEL, concertDate, concertDayKey, concertTime,
   dayHeading, priceLabel,
-  type SceneCity, type SceneConcert, type ScenePeriod, type SceneSort,
+  type SceneCity, type SceneConcert, type ScenePeriod, type SceneSort, type SceneSuggestions,
 } from '../lib/scene';
 
 const PERIOD_IDS = SCENE_PERIODS.map(([id]) => id);
@@ -51,7 +51,7 @@ export default function ScenePage() {
   const fMoooza = sp.get('moooza') === '1';
   const rawSort = sp.get('sort') as SceneSort | null;
   const sort: SceneSort = rawSort && SCENE_SORTS.some(([id]) => id === rawSort) ? rawSort : 'date';
-  const activeFilters = (fq ? 1 : 0) + (fTypes.length ? 1 : 0) + (fPrice ? 1 : 0) + (fMoooza ? 1 : 0);
+  const activeFilters = (fTypes.length ? 1 : 0) + (fPrice ? 1 : 0) + (fMoooza ? 1 : 0);
   const setParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(sp);
     for (const [k, v] of Object.entries(patch)) { if (v) next.set(k, v); else next.delete(k); }
@@ -101,7 +101,7 @@ export default function ScenePage() {
       ? `Концерты и живая музыка — ${cityName}: даты, площадки и билеты на Сцене Moooza.`
       : 'Сцена Moooza: концерты и живая музыка по городам России — кто играет сегодня, на выходных и в этом месяце.',
     canonical: citySlug ? `/scene/${citySlug}` : '/scene',
-    robots: period === 'all' && !activeFilters && sort === 'date' ? ROBOTS_INDEX : ROBOTS_NOINDEX_FOLLOW,
+    robots: period === 'all' && !activeFilters && !fq && sort === 'date' ? ROBOTS_INDEX : ROBOTS_NOINDEX_FOLLOW,
   });
 
   const setPeriod = (p: ScenePeriod) => {
@@ -136,8 +136,8 @@ export default function ScenePage() {
   return (
     <div className="min-h-screen min-h-[100dvh] bg-slate-950 pb-28">
       <div className="max-w-2xl mx-auto">
-        {/* Шапка */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        {/* Шапка: при прокрутке закреплены только заголовок и поиск */}
+        <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-3.5 pb-2 flex items-center gap-2">
             <Ticket size={20} className="text-primary-400 flex-shrink-0" />
             <div className="min-w-0 flex-1">
@@ -147,6 +147,17 @@ export default function ScenePage() {
               <p className="text-[11px] text-slate-500 leading-tight truncate">Концерты и живая музыка по городам</p>
             </div>
           </div>
+          <div className="px-4 pb-3">
+            <SceneSearch
+              key={citySlug ?? 'all'}
+              value={fq}
+              citySlug={citySlug}
+              onSearch={(text) => setParams({ q: text.trim() || null })}
+              onPickCity={(slug) => goCity(slug)}
+            />
+          </div>
+        </div>
+        <div className="pt-3 border-b border-slate-800/60">
           {/* Города: лента листается свайпом, колесом, мышью и стрелками */}
           <HorizontalScroller className="mx-4 mb-2">
             <CityChip active={false} onClick={() => setPickerOpen(true)}>
@@ -208,7 +219,6 @@ export default function ScenePage() {
             </label>
             {activeFilters > 0 && (
               <HorizontalScroller className="flex-1 min-w-0">
-                {fq && <FilterChip onClear={() => setParams({ q: null })}>«{fq}»</FilterChip>}
                 {fTypes.length > 0 && <FilterChip onClear={() => setParams({ type: null })}>{fTypes.join(', ')}</FilterChip>}
                 {fPrice > 0 && <FilterChip onClear={() => setParams({ price: null })}>{SCENE_PRICES.find(([v]) => v === fPrice)?.[1] ?? `до ${fPrice} ₽`}</FilterChip>}
                 {fMoooza && <FilterChip onClear={() => setParams({ moooza: null })}>Артисты Moooza</FilterChip>}
@@ -245,6 +255,11 @@ export default function ScenePage() {
             />
           ) : (
             <>
+              {first?.fuzzy && fq && (
+                <p className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200">
+                  Точных совпадений по «{fq}» нет — показаны похожие.
+                </p>
+              )}
               {first && (
                 <p className="text-xs text-slate-500">
                   {first.total} {plural(first.total, 'концерт', 'концерта', 'концертов')}
@@ -288,10 +303,9 @@ export default function ScenePage() {
       </BottomSheet>
       <BottomSheet isOpen={filtersOpen} onClose={() => setFiltersOpen(false)} title="Фильтры" height="auto">
         <FiltersForm
-          initial={{ q: fq, types: fTypes, price: fPrice, moooza: fMoooza }}
+          initial={{ types: fTypes, price: fPrice, moooza: fMoooza }}
           onApply={(f) => {
             setParams({
-              q: f.q.trim() || null,
               type: f.types.length ? f.types.join(',') : null,
               price: f.price ? String(f.price) : null,
               moooza: f.moooza ? '1' : null,
@@ -317,6 +331,148 @@ function CityChip({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
+/**
+ * Поиск «Сцены» по мере набора: лента обновляется через 0,3 с после ввода, под полем —
+ * подсказки (события, артисты, площадки, города). Регистр, «ё», раскладка, транслит и
+ * опечатки сервер прощает (GET /api/scene/suggest).
+ */
+function SceneSearch({ value, citySlug, onSearch, onPickCity }: {
+  value: string;
+  citySlug?: string;
+  onSearch: (text: string) => void;
+  onPickCity: (slug: string) => void;
+}) {
+  const navigate = useNavigate();
+  const [text, setText] = useState(value);
+  const [debounced, setDebounced] = useState(value);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Ввод → через 300 мс: подсказки и лента.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(text), 300);
+    return () => clearTimeout(t);
+  }, [text]);
+  useEffect(() => {
+    if (debounced.trim() !== value) onSearch(debounced);
+  }, [debounced]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Клик мимо — закрыть подсказки.
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  const q = debounced.trim();
+  const sugQ = useQuery({
+    queryKey: ['scene', 'suggest', q, citySlug ?? ''],
+    queryFn: () => sceneAPI.suggest(q, citySlug),
+    enabled: open && q.length >= 2,
+    staleTime: 30_000,
+  });
+  const s: SceneSuggestions | undefined = sugQ.data;
+  const hasAny = !!s && (s.events.length + s.artists.length + s.venues.length + s.cities.length) > 0;
+
+  const pick = (fn: () => void) => { setOpen(false); fn(); };
+  const searchFor = (t: string) => pick(() => { setText(t); setDebounced(t); onSearch(t); });
+
+  return (
+    <div ref={boxRef} className="relative">
+      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+      <input
+        type="search"
+        value={text}
+        onChange={(e) => { setText(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Enter') { e.preventDefault(); searchFor(text.trim()); }
+        }}
+        maxLength={100}
+        placeholder="Артист, событие, площадка или город"
+        enterKeyHint="search"
+        className="w-full pl-9 pr-9 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 [&::-webkit-search-cancel-button]:hidden"
+      />
+      {text && (
+        <button
+          type="button"
+          onClick={() => searchFor('')}
+          aria-label="Очистить поиск"
+          className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg text-slate-500 hover:text-white"
+        >
+          <X size={15} />
+        </button>
+      )}
+      {open && q.length >= 2 && (hasAny || sugQ.isFetching) && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-30 max-h-[60vh] overflow-y-auto rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5">
+          {!hasAny && sugQ.isFetching && (
+            <p className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Ищем…</p>
+          )}
+          {s?.fuzzy && <p className="px-4 pt-1.5 pb-1 text-[11px] text-amber-300/90">Похожие варианты</p>}
+          {s && s.cities.length > 0 && (
+            <SuggestGroup title="Города">
+              {s.cities.map((c) => (
+                <SuggestRow key={c.slug} onClick={() => pick(() => { setText(''); onPickCity(c.slug); })} icon={<MapPin size={15} />}
+                  title={c.name} sub={`${c.upcoming} ${plural(c.upcoming, 'концерт', 'концерта', 'концертов')}`} />
+              ))}
+            </SuggestGroup>
+          )}
+          {s && s.artists.length > 0 && (
+            <SuggestGroup title="Артисты Moooza">
+              {s.artists.map((a) => (
+                <SuggestRow key={a.id} onClick={() => searchFor(a.name)}
+                  icon={<AvatarComponent src={a.avatar} name={a.name} size={28} />} title={a.name} sub="Концерты артиста" />
+              ))}
+            </SuggestGroup>
+          )}
+          {s && s.events.length > 0 && (
+            <SuggestGroup title="События">
+              {s.events.map((e) => {
+                const t = concertTime(e);
+                return (
+                  <SuggestRow key={e.id} onClick={() => pick(() => navigate(`/concerts/${e.id}`))}
+                    icon={e.imageUrl ? <img src={e.imageUrl} alt="" className="w-7 h-7 rounded-lg object-cover" /> : <Music2 size={15} />}
+                    title={e.title} sub={[`${concertDate(e)}${t ? `, ${t}` : ''}`, e.venue, e.cityName].filter(Boolean).join(' · ')} />
+                );
+              })}
+            </SuggestGroup>
+          )}
+          {s && s.venues.length > 0 && (
+            <SuggestGroup title="Площадки">
+              {s.venues.map((v) => (
+                <SuggestRow key={`${v.name}|${v.cityName}`} onClick={() => searchFor(v.name)} icon={<MapPin size={15} />}
+                  title={v.name} sub={`${v.cityName} · ${v.count} ${plural(v.count, 'событие', 'события', 'событий')}`} />
+              ))}
+            </SuggestGroup>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuggestGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="py-1">
+      <p className="px-4 pt-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function SuggestRow({ icon, title, sub, onClick }: { icon: React.ReactNode; title: string; sub?: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-slate-800/70 active:bg-slate-800">
+      <span className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg bg-slate-800 text-slate-400 overflow-hidden">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm text-white truncate">{title}</span>
+        {sub && <span className="block text-[11px] text-slate-500 truncate">{sub}</span>}
+      </span>
+    </button>
+  );
+}
+
 function FilterChip({ onClear, children }: { onClear: () => void; children: React.ReactNode }) {
   return (
     <span className="flex-shrink-0 inline-flex items-center gap-1 min-h-[32px] pl-3 pr-1 rounded-xl bg-primary-500/10 border border-primary-500/25 text-xs text-primary-200">
@@ -328,7 +484,7 @@ function FilterChip({ onClear, children }: { onClear: () => void; children: Reac
   );
 }
 
-interface FiltersValue { q: string; types: string[]; price: number; moooza: boolean }
+interface FiltersValue { types: string[]; price: number; moooza: boolean }
 
 function FiltersForm({ initial, onApply }: { initial: FiltersValue; onApply: (f: FiltersValue) => void }) {
   const [f, setF] = useState<FiltersValue>(initial);
@@ -338,19 +494,6 @@ function FiltersForm({ initial, onApply }: { initial: FiltersValue; onApply: (f:
     }`;
   return (
     <form className="p-4 space-y-4" onSubmit={(e) => { e.preventDefault(); onApply(f); }}>
-      <div>
-        <label className="block text-xs text-slate-500 mb-1.5">Поиск</label>
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            value={f.q}
-            onChange={(e) => setF({ ...f, q: e.target.value })}
-            maxLength={100}
-            placeholder="Артист, событие или площадка"
-            className="w-full pl-9 pr-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-        </div>
-      </div>
       <div>
         <p className="text-xs text-slate-500 mb-1.5">Что</p>
         <div className="flex flex-wrap gap-2">
@@ -378,7 +521,7 @@ function FiltersForm({ initial, onApply }: { initial: FiltersValue; onApply: (f:
         <input type="checkbox" checked={f.moooza} onChange={(e) => setF({ ...f, moooza: e.target.checked })} className="w-5 h-5 accent-primary-500" />
       </label>
       <div className="flex gap-2">
-        <button type="button" onClick={() => onApply({ q: '', types: [], price: 0, moooza: false })} className="flex-1 min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold">
+        <button type="button" onClick={() => onApply({ types: [], price: 0, moooza: false })} className="flex-1 min-h-[48px] rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold">
           Сбросить
         </button>
         <button type="submit" className="flex-[2] min-h-[48px] rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold">

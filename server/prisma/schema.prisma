@@ -1997,6 +1997,9 @@ model Concert {
   cityName    String
   // lib/qtickets.cityKey(cityName): нижний регистр, ё→е — фильтр городов и слаг.
   cityKey     String
+  // generated (lower, ё→е): название + площадка + город + тип + организатор —
+  // поиск «Сцены» (lib/searchQuery), никогда не пишется приложением.
+  searchNorm  String?
   venue       String?
   address     String?
   // Страница события в источнике (Qtickets / Яндекс Афиша) и ссылка на билеты.
