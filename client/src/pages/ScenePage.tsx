@@ -109,13 +109,15 @@ export default function ScenePage() {
     if (p === 'all') next.delete('period'); else next.set('period', p);
     setSp(next, { replace: true });
   };
-  const goCity = (slug: string | null) => {
+  const goCity = (slug: string | null, opts?: { clearSearch?: boolean }) => {
     setPickerOpen(false);
     if (!slug) {
       try { localStorage.setItem(LAST_CITY_KEY, ALL_CITIES); } catch { /* приватный режим */ }
     }
-    // Период, фильтры и сортировка сохраняются при смене города.
-    const qs = sp.toString();
+    // Период, фильтры, поиск и сортировка сохраняются при смене города (город из подсказки — без поиска).
+    const next = new URLSearchParams(sp);
+    if (opts?.clearSearch) next.delete('q');
+    const qs = next.toString();
     navigate(`${slug ? `/scene/${slug}` : '/scene'}${qs ? `?${qs}` : ''}`, { state: slug ? null : { allCities: true } });
   };
 
@@ -136,7 +138,7 @@ export default function ScenePage() {
   return (
     <div className="min-h-screen min-h-[100dvh] bg-slate-950 pb-28">
       <div className="max-w-2xl mx-auto">
-        {/* Шапка: при прокрутке закреплены только заголовок и поиск */}
+        {/* Шапка: заголовок и поиск (sticky — см. overflow-x в index.css) */}
         <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-3.5 pb-2 flex items-center gap-2">
             <Ticket size={20} className="text-primary-400 flex-shrink-0" />
@@ -153,7 +155,7 @@ export default function ScenePage() {
               value={fq}
               citySlug={citySlug}
               onSearch={(text) => setParams({ q: text.trim() || null })}
-              onPickCity={(slug) => goCity(slug)}
+              onPickCity={(slug) => goCity(slug, { clearSearch: true })}
             />
           </div>
         </div>
@@ -386,7 +388,8 @@ function SceneSearch({ value, citySlug, onSearch, onPickCity }: {
         onChange={(e) => { setText(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
+          // Esc сперва закрывает подсказки; в type=search браузер иначе стирает текст.
+          if (e.key === 'Escape' && open) { e.preventDefault(); setOpen(false); }
           if (e.key === 'Enter') { e.preventDefault(); searchFor(text.trim()); }
         }}
         maxLength={100}
