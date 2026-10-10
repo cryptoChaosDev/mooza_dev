@@ -55,6 +55,10 @@ services:
       SEO_SNAPSHOTS: ${SEO_SNAPSHOTS:-false}
       SEO_INDEXABLE: ${SEO_INDEXABLE:-false}
       SPA_TEMPLATE_URL: ${SPA_TEMPLATE_URL:-http://web:3000/index.html}
+      # «Сцена»: ночной импорт афиши Qtickets (lib/sceneConcerts, 05:30 МСК) — true включает;
+      # партнёрский код для ссылок «Билеты» (например, qpartner=…) — пусто, пока нет.
+      QTICKETS_IMPORT: ${QTICKETS_IMPORT:-false}
+      QTICKETS_PARTNER_QUERY: ${QTICKETS_PARTNER_QUERY:-}
       VK_CLIENT_ID: ${VK_CLIENT_ID}
       VK_CLIENT_SECRET: ${VK_CLIENT_SECRET}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
