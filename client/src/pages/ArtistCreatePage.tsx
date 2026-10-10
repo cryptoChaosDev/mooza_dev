@@ -536,8 +536,22 @@ export default function ArtistCreatePage() {
               </div>
             </div>
 
-            <MediaImportList title={importListTitle(foundReleases, 'release')} items={foundReleases} onImport={importReleases} />
-            <MediaImportList title={importListTitle(foundClips, 'clip')} items={foundClips} onImport={importClips} />
+            {/* Есть ссылка на Яндекс Музыку — сервер сам подтягивает релизы, клипы и
+                слушателей (syncArtistNow); ручной импорт тех же релизов не нужен. */}
+            {created.ymId ? (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-800/50 border border-slate-700">
+                <Loader2 size={14} className="flex-shrink-0 mt-0.5 animate-spin text-primary-400" />
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Подтягиваем данные с Яндекс Музыки автоматически: релизы, клипы, слушателей и описание.
+                  Через минуту-две они появятся на странице артиста.
+                </p>
+              </div>
+            ) : (
+              <>
+                <MediaImportList title={importListTitle(foundReleases, 'release')} items={foundReleases} onImport={importReleases} />
+                <MediaImportList title={importListTitle(foundClips, 'clip')} items={foundClips} onImport={importClips} />
+              </>
+            )}
 
             <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
               <p className="text-xs text-slate-300 leading-relaxed mb-3">

@@ -455,6 +455,11 @@ function App() {
 
       new_notification: (notif: any, ack?: unknown) => {
         ackVisible(ack);
+        // Импорт с Яндекс Музыки (разовый синк после создания/привязки карточки) —
+        // открытая страница артиста сразу показывает новые релизы, клипы, слушателей.
+        if (notif?.type === 'release_import') {
+          queryClient.invalidateQueries({ predicate: (q) => ['artist', 'releases', 'clips'].includes(String(q.queryKey[0])) });
+        }
         // If this is a message notification for the chat we're already viewing,
         // we're reading it live — mark it read (only if the tab is visible) and
         // don't badge or list it.

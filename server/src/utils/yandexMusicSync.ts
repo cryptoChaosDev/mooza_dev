@@ -29,6 +29,10 @@ import {
  *    уведомление, они дополнят кредиты.
  *
  * API неофициальное: любой сбой одного артиста не прерывает обход, итог — в TG-лог.
+ *
+ * Плюс разовый синк одной карточки — сразу после создания, привязки ссылки или
+ * верификации (syncArtistNow), в т.ч. непроверенной: данные появляются сразу,
+ * а не следующей ночью. Ночной обход — по-прежнему только проверенные.
  */
 
 const YM_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Moooza/1.0';
@@ -285,11 +289,15 @@ function ymVideoToClip(v: any): { url: string; platform: 'YOUTUBE' | 'YANDEX_MUS
  * Синк одного артиста. Возвращает сводку изменений (для лога) или null, если
  * артист не привязан / ЯМ не ответила / привязку сменили во время прогона.
  */
-export async function syncArtistFromYandexMusic(artist: {
-  id: string;
-  name: string;
-  ymId: string | null;
-}): Promise<{ listeners?: number; newReleases: number; newClips: number } | null> {
+export async function syncArtistFromYandexMusic(
+  artist: {
+    id: string;
+    name: string;
+    ymId: string | null;
+  },
+  // allowUnverified — разовый синк (syncArtistNow): работает и для непроверенной карточки.
+  opts: { allowUnverified?: boolean } = {},
+): Promise<{ listeners?: number; newReleases: number; newClips: number } | null> {
   const ymId = artist.ymId;
   if (!ymId) return null;
 
@@ -312,7 +320,8 @@ export async function syncArtistFromYandexMusic(artist: {
       select: { ymId: true, status: true, socialLinks: true, bandLink: true, description: true, ymData: true, updatedAt: true },
     });
     // Привязку сменили/артиста сняли с публикации, пока шёл обход — не трогаем.
-    if (!fresh || fresh.ymId !== ymId || (fresh.status !== 'VERIFIED' && fresh.status !== 'APPROVED')) return null;
+    const statusOk = opts.allowUnverified || fresh?.status === 'VERIFIED' || fresh?.status === 'APPROVED';
+    if (!fresh || fresh.ymId !== ymId || !statusOk) return null;
 
     const prevDone: string[] = Array.isArray((fresh.ymData as any)?.autofilled) ? (fresh.ymData as any).autofilled : [];
     const { patch: autofill, done } = computeAutofill(fresh, new Set(prevDone), (vitrine as any).links, ymDescription);
@@ -493,6 +502,33 @@ export async function syncArtistFromYandexMusic(artist: {
   }
 
   return summary;
+}
+
+// Разовый синк одной карточки — сразу после создания, привязки ссылки на ЯМ или
+// верификации, не дожидаясь ночного обхода. Не больше одного прогона на артиста
+// одновременно (повторный вызов, пока идёт первый, — пропускается). Never throws.
+// Вызывающие не ждут (void): ответ пользователю не зависит от API Яндекса.
+const syncNowInFlight = new Set<string>();
+
+export async function syncArtistNow(artistId: string, reason: 'created' | 'linked' | 'verified'): Promise<void> {
+  if (syncNowInFlight.has(artistId)) return;
+  syncNowInFlight.add(artistId);
+  try {
+    const artist = await prisma.artist.findUnique({
+      where: { id: artistId },
+      select: { id: true, name: true, ymId: true },
+    });
+    if (!artist?.ymId) return;
+    const res = await syncArtistFromYandexMusic(artist, { allowUnverified: true });
+    logger.info(
+      `YM sync now (${reason}) «${artist.name}»: ` +
+      (res ? `слушателей ${res.listeners ?? '—'}, релизов +${res.newReleases}, клипов +${res.newClips}` : 'пропущен'),
+    );
+  } catch (e: any) {
+    logger.warn(`YM sync now (${reason}) failed for ${artistId}: ${e?.message}`);
+  } finally {
+    syncNowInFlight.delete(artistId);
+  }
 }
 
 // Защита от параллельных прогонов (ночной джоб + ручной POST /admin/ym-sync +

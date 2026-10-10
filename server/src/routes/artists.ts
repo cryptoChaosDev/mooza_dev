@@ -10,7 +10,7 @@ import { notifyVerificationRequested, notifyVerificationDecision } from '../lib/
 import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
 import { yoNorm } from '../utils/search';
 import { notify, notifyMany } from '../utils/notify';
-import { extractYmArtistId } from '../utils/yandexMusicSync';
+import { extractYmArtistId, syncArtistNow } from '../utils/yandexMusicSync';
 import {
   getArtistAccess,
   artistAdminIds,
@@ -645,6 +645,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       tgEvent.artist('создан', artist.name, `${creator?.firstName} ${creator?.lastName}`);
     } catch {}
 
+    // Ссылка на Яндекс Музыку — подтягиваем данные сразу (фоном), не ждём ночного синка.
+    if (artist.ymId) void syncArtistNow(artist.id, 'created');
+
     const { submittedById: _s, verificationRequestedById: _r, ...created } = artist;
     return res.status(201).json(serializeArtist({
       ...created,
@@ -769,6 +772,9 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         },
       },
     });
+
+    // Привязали (или сменили) ссылку на Яндекс Музыку — синк сразу, фоном.
+    if (typeof updateData.ymId === 'string') void syncArtistNow(artist.id, 'linked');
 
     const { submittedById: _s, verificationRequestedById: _r, ...updated } = artist;
     return res.json(serializeArtist({

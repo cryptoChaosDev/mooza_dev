@@ -9,6 +9,7 @@ import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
 import { artistAdminIds } from '../lib/artistAccess';
 import { notifyVerificationDecision } from '../lib/artistModerationNotify';
+import { syncArtistNow } from '../utils/yandexMusicSync';
 import { disconnectUserSockets } from '../socket';
 import {
   WAITLIST_BULK_MAX, INVITES_DISABLED_ERROR, waitlistInvitesWork, inviteWaitlistEntry, inviteWaitlistBulk,
@@ -938,6 +939,8 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: Auth
       link: `/artist/${artist.id}`,
     });
     void notifyVerificationDecision(artist, 'verified');
+    // Свежие данные Яндекс Музыки сразу после верификации, не следующей ночью.
+    if (artist.ymId) void syncArtistNow(artist.id, 'verified');
 
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { return adminError(res, 'PATCH /artists/:id/verify', e); }

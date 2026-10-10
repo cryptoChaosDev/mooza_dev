@@ -87,6 +87,14 @@ function pluralMembers(n: number): string {
   return 'участников';
 }
 
+// Разовый синк Яндекс Музыки после создания карточки / привязки ссылки ещё не
+// дошёл: ссылка есть, витрины ymData нет, карточку меняли не дольше 3 мин назад.
+const YM_SYNC_WAIT_MS = 3 * 60_000;
+function ymSyncPending(a: any): boolean {
+  if (!a?.ymId || a.ymData) return false;
+  return Date.now() - new Date(a.updatedAt ?? 0).getTime() < YM_SYNC_WAIT_MS;
+}
+
 export default function ArtistPage() {
   // Адрес — /artist/<slug> (человекочитаемый) или /artist/<uuid> (старые ссылки):
   // сервер принимает оба и прежние слаги, а страница после загрузки меняет адрес
@@ -147,6 +155,9 @@ export default function ArtistPage() {
       const { data } = await artistAPI.getArtist(idOrSlug!);
       return data;
     },
+    // Свежая карточка со ссылкой на Яндекс Музыку: сервер подтягивает данные фоном
+    // (syncArtistNow) — перечитываем, пока они не придут.
+    refetchInterval: (q) => (ymSyncPending(q.state.data) ? 5000 : false),
     enabled: !!idOrSlug,
     retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
   });
@@ -706,6 +717,13 @@ export default function ArtistPage() {
           <ArtistConcerts artistId={artist.id} artistName={artist.name} concerts={artist.ymData?.concerts} />
         </div>
 
+
+        {viewerIsAdmin && ymSyncPending(artist) && (
+          <div className="mb-4 flex items-center gap-2 p-2.5 rounded-xl bg-slate-800/50 border border-slate-700 text-xs text-slate-300">
+            <Loader2 size={13} className="flex-shrink-0 animate-spin text-primary-400" />
+            Подтягиваем данные с Яндекс Музыки — релизы, клипы и слушателей. Обычно это занимает до пары минут.
+          </div>
+        )}
 
         {/* Verification panel for admins */}
         {viewerIsAdmin && (
